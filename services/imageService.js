@@ -42,9 +42,9 @@ class ImageService {
    * Pollinations AI (Photorealistic 1080x1350 vertical cinematic artwork)
    */
   async _generateWithPollinations(prompt) {
-    // Clean and encode prompt
-    const enhancedPrompt = `${prompt}, aspect ratio 4:5 vertical portrait, cinematic lighting, 8k resolution, photorealistic, majestic biblical digital art, upper half dark clouds with god rays, lower half detailed panoramic scenery`;
-    const encoded = encodeURIComponent(enhancedPrompt.slice(0, 400));
+    // Clean and encode prompt with exact masterclass visual cues
+    const enhancedPrompt = `${prompt}, aspect ratio 4:5 vertical portrait, cinematic lighting, deep navy blue, royal blue, antique gold and warm ivory, photorealistic 8k, reverent sacred biblical digital art, upper half dark navy clouds with god rays, lower half majestic panoramic scenery, volumetric lighting`;
+    const encoded = encodeURIComponent(enhancedPrompt.slice(0, 480));
     const seed = Math.floor(Math.random() * 999999);
     const url = `https://image.pollinations.ai/prompt/${encoded}?width=1080&height=1350&nologo=true&seed=${seed}&model=flux`;
 

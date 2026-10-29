@@ -168,8 +168,8 @@ async function handleGeneratePoster() {
     captionBox.value = fullCaption;
 
     // Update Hashtags Cloud
-    const tagsString = job.trendingHashtags || job.aiAnalysis?.trendingHashtags || '';
-    updateHashtagChips(tagsString);
+    const rawTags = job.trendingHashtags || job.aiAnalysis?.trendingHashtags || '';
+    updateHashtagChips(rawTags);
 
     // Update Download Button
     btnDownload.href = imageSource;
@@ -218,13 +218,20 @@ async function handleCopyCaption() {
   }
 }
 
-function updateHashtagChips(tagsString) {
-  if (!tagsString || !hashtagsCloud) return;
-  const tags = tagsString.split(/\s+/).filter(t => t.startsWith('#'));
+function updateHashtagChips(tagsInput) {
+  if (!tagsInput || !hashtagsCloud) return;
+  let tags = [];
+  if (Array.isArray(tagsInput)) {
+    tags = tagsInput.map(t => String(t).trim()).filter(t => t.length > 0).map(t => t.startsWith('#') ? t : `#${t}`);
+  } else if (typeof tagsInput === 'string') {
+    tags = tagsInput.split(/\s+/).filter(t => t.startsWith('#'));
+  } else {
+    return;
+  }
   if (tags.length === 0) return;
 
   hashtagsCloud.innerHTML = '';
-  tags.forEach(tag => {
+  tags.slice(0, 15).forEach(tag => {
     const span = document.createElement('span');
     span.className = 'htag';
     span.textContent = tag;

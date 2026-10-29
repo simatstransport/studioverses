@@ -98,6 +98,9 @@ class PosterEngine {
     // 2. Cinematic Gradient Overlay (Dark in upper half for text legibility, transparent in lower half for scenery)
     this._applyCinematicTopOverlay(ctx, width, height);
 
+    // Floating Golden Divine Particles
+    this._renderDivineGoldenParticles(ctx, width, height);
+
     // 3. Header: — HOLY BIBLE VERSE —
     this._renderHeader(ctx, width, 105);
 
@@ -213,11 +216,19 @@ class PosterEngine {
   _applyCinematicTopOverlay(ctx, width, height) {
     ctx.save();
 
-    // Soft dark gradient focused on the upper half
+    // Deep royal navy blue atmosphere tint
+    const tintGrad = ctx.createLinearGradient(0, 0, width, height);
+    tintGrad.addColorStop(0, 'rgba(8, 14, 28, 0.42)');
+    tintGrad.addColorStop(0.5, 'rgba(12, 18, 38, 0.28)');
+    tintGrad.addColorStop(1, 'rgba(6, 8, 16, 0.35)');
+    ctx.fillStyle = tintGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Soft dark gradient focused on the upper half for crisp text contrast
     const topGrad = ctx.createLinearGradient(0, 0, 0, height * 0.72);
-    topGrad.addColorStop(0, 'rgba(4, 7, 14, 0.82)');
-    topGrad.addColorStop(0.35, 'rgba(6, 10, 20, 0.72)');
-    topGrad.addColorStop(0.65, 'rgba(8, 12, 22, 0.45)');
+    topGrad.addColorStop(0, 'rgba(4, 8, 18, 0.90)');
+    topGrad.addColorStop(0.35, 'rgba(6, 12, 26, 0.78)');
+    topGrad.addColorStop(0.65, 'rgba(8, 14, 28, 0.50)');
     topGrad.addColorStop(0.88, 'rgba(0, 0, 0, 0.15)');
     topGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = topGrad;
@@ -226,13 +237,37 @@ class PosterEngine {
     // Subtle radial spotlight behind center text
     const centerGlow = ctx.createRadialGradient(
       width / 2, 420, 50,
-      width / 2, 420, 480
+      width / 2, 420, 500
     );
-    centerGlow.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    centerGlow.addColorStop(0, 'rgba(0, 0, 0, 0.32)');
     centerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = centerGlow;
     ctx.fillRect(0, 0, width, height * 0.7);
 
+    ctx.restore();
+  }
+
+  /**
+   * Delicate floating golden light particles (divine bokeh)
+   */
+  _renderDivineGoldenParticles(ctx, width, height) {
+    ctx.save();
+    for (let i = 0; i < 50; i++) {
+      const x = ((Math.sin(i * 123.45) * 0.5 + 0.5) * (width - 120)) + 60;
+      const y = ((Math.cos(i * 87.65) * 0.5 + 0.5) * (height - 180)) + 80;
+      const radius = (i % 4 === 0) ? 2.5 : (i % 2 === 0) ? 1.6 : 1.0;
+      const alpha = (i % 3 === 0) ? 0.65 : 0.38;
+
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3.5);
+      grad.addColorStop(0, `rgba(255, 238, 175, ${alpha})`);
+      grad.addColorStop(0.5, `rgba(248, 215, 117, ${alpha * 0.45})`);
+      grad.addColorStop(1, 'rgba(248, 215, 117, 0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
