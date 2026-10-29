@@ -77,6 +77,19 @@ function setupEventListeners() {
   // Copy Caption Button
   btnCopyCaption.addEventListener('click', handleCopyCaption);
 
+  // Copy Master Prompt Button
+  const btnCopyMasterPrompt = document.getElementById('btnCopyMasterPrompt');
+  if (btnCopyMasterPrompt) {
+    btnCopyMasterPrompt.addEventListener('click', () => {
+      const val = promptVal.value || promptVal.textContent;
+      if (val) {
+        navigator.clipboard.writeText(val);
+        btnCopyMasterPrompt.textContent = '✓ Copied!';
+        setTimeout(() => { btnCopyMasterPrompt.textContent = '📋 Copy'; }, 2000);
+      }
+    });
+  }
+
   // Fullscreen button
   btnFullscreen.addEventListener('click', () => {
     if (posterImage.src) {
@@ -160,8 +173,13 @@ async function handleGeneratePoster() {
     previewReference.textContent = job.reference?.toUpperCase() || reference.toUpperCase();
 
     // Update Details
-    hookVal.textContent = job.shortHook || '—';
-    promptVal.textContent = job.aiAnalysis?.imagePrompt || '—';
+    hookVal.textContent = job.shortHook || job.aiAnalysis?.locationTheme || 'Solomon’s Temple in Jerusalem';
+    const masterText = job.aiAnalysis?.masterPrompt || job.aiAnalysis?.imagePrompt || '—';
+    if (promptVal.tagName === 'TEXTAREA') {
+      promptVal.value = masterText;
+    } else {
+      promptVal.textContent = masterText;
+    }
 
     // Update Caption Box (Below Poster)
     const fullCaption = job.fullInstagramCaption || job.aiAnalysis?.fullInstagramCaption || '';

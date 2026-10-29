@@ -11,7 +11,47 @@ class GeminiService {
   }
 
   /**
-   * Generates custom verse-matched scene prompt matching user's exact masterclass specification
+   * Builds the exact Master Prompt template requested by the user
+   */
+  buildMasterPrompt(verseData, highlightEn, highlightTa, locationTheme) {
+    const theme = locationTheme || this._inferBiblicalLocation(verseData);
+    const hlEn = highlightEn || this._detectHighlightEn(verseData.textEn);
+    const hlTa = highlightTa || this._detectHighlightTa(verseData.textTa);
+
+    return `Create a premium, ultra-realistic Christian Bible verse poster featuring ${verseData.referenceEn} in both English and Tamil, beautifully arranged in a single image with a majestic spiritual background.
+
+📖 ENGLISH BIBLE VERSE — KJV
+“${verseData.textEn}”
+
+📖 தமிழ் வேதாகம வசனம்
+“${verseData.textTa}”
+
+Reference: ${verseData.referenceEn} | ${verseData.referenceTa}
+
+BACKGROUND AND SPIRITUAL ATMOSPHERE
+Create a breathtaking ancient biblical landscape inspired by ${theme}. Show majestic temple architecture or sacred landscape in the distance, heavenly golden rays breaking through dramatic dark navy clouds, warm divine light illuminating the sanctuary, subtle floating golden particles, distant mountains, and a peaceful sacred atmosphere representing God’s faithfulness and fulfilled promises.
+
+Use a cinematic combination of deep navy blue, royal blue, antique gold, and warm ivory. Make the scene photorealistic, reverent, majestic, and spiritually uplifting, with realistic volumetric lighting and extraordinary atmospheric depth.
+
+TEXT LAYOUT — EXTREMELY IMPORTANT
+* Place the heading “HOLY BIBLE VERSE” at the top in elegant gold serif lettering.
+* Display the complete English verse in the upper-middle section using clear, elegant ivory-white serif typography.
+* Add a thin decorative golden divider.
+* Display the complete Tamil verse beneath the English verse using a beautiful, highly readable Tamil font that correctly supports Tamil characters.
+* Keep both languages equally important, balanced, and readable.
+* Highlight “${hlEn}” and “${hlTa}” in subtle golden lettering.
+* At the bottom, display: “${verseData.referenceEn} | ${verseData.referenceTa}”.
+* Maintain generous spacing, elegant alignment, and strong contrast between the text and background.
+* Keep the temple/scenery visible in the lower half without interfering with the verse text.
+
+QUALITY REQUIREMENTS
+Vertical 4:5 Instagram poster, ultra-realistic 8K-style visual quality, cinematic lighting, premium Christian devotional design, professional typography, clean composition, and high readability on mobile screens.
+
+CRITICAL TEXT ACCURACY: Preserve both supplied Bible verses exactly as written. Do not translate them again, paraphrase them, omit words, mix Tamil and English letters, or generate incorrect Tamil characters. Do not add extra verses, logos, watermarks, or unrelated text.`;
+  }
+
+  /**
+   * Analyzes verse and produces the master prompt, image prompt, and caption
    */
   async analyzeVerse(verseData, language = 'both') {
     const scriptureText = language === 'ta'
@@ -20,70 +60,66 @@ class GeminiService {
         ? verseData.textEn
         : `${verseData.textEn}\n\n${verseData.textTa}`;
 
-    const reference = language === 'ta'
-      ? verseData.referenceTa
-      : `${verseData.referenceEn.toUpperCase()} | ${verseData.referenceTa}`;
+    const defaultHighlightEn = this._detectHighlightEn(verseData.textEn);
+    const defaultHighlightTa = this._detectHighlightTa(verseData.textTa);
+    const locationTheme = this._inferBiblicalLocation(verseData);
 
-    // If no API key is provided, return intelligent contextual fallback
-    if (!this.apiKey) {
-      console.warn('[GeminiService] No GEMINI_API_KEY found. Generating smart default metadata.');
-      return this._generateFallbackResponse(verseData, language);
+    let highlightEn = defaultHighlightEn;
+    let highlightTa = defaultHighlightTa;
+    let captionText = this._createDefaultCaption(verseData);
+    let trendingHashtags = this._createDefaultHashtags(verseData);
+    let specificScenePrompt = `A breathtaking ancient biblical landscape inspired by ${locationTheme}. Lower 45% shows majestic temple architecture and ancient stone terrace in Jerusalem, warm divine light illuminating stone columns, subtle floating golden particles, distant mountains. Upper 55% shows dramatic dark navy blue and royal blue volumetric clouds with heavenly golden sun rays breaking through from the upper right, leaving clean negative space for typography. Cinematic deep navy blue, royal blue, antique gold, and warm ivory palette. Photorealistic 8k, reverent, majestic, vertical 4:5 portrait.`;
+
+    if (this.apiKey) {
+      const systemPrompt = `You are an elite Christian creative director and biblical illustrator.
+Given a Bible verse, generate a strict JSON object with:
+1. "locationTheme": Specific biblical location/theme for this verse (e.g. "Solomon’s Temple in Jerusalem", "Shepherd pastures of Judea", "Mount Calvary at dawn", "Sea of Galilee").
+2. "highlightEn": Sacred phrase in English to highlight in Gold (e.g. "BLESSED BE THE LORD GOD OF ISRAEL").
+3. "highlightTa": Corresponding sacred phrase in Tamil to highlight in Gold (e.g. "இஸ்ரவேலின் தேவனாகிய கர்த்தருக்கு ஸ்தோத்திரம்").
+4. "scenePrompt": 8K text-to-image prompt for the background (lower 45% biblical architecture/landscape, upper 55% dramatic dark navy blue volumetric clouds with golden god rays, deep navy, royal blue, antique gold, warm ivory).
+5. "caption": Inspirational devotional takeaway and prayer.
+6. "trendingHashtags": 15-20 top trending Christian hashtags for Instagram.
+
+Return ONLY raw JSON, without markdown.`;
+
+      const userPrompt = `Verse Reference: ${verseData.referenceEn} | ${verseData.referenceTa}
+English: "${verseData.textEn}"
+Tamil: "${verseData.textTa}"`;
+
+      try {
+        const raw = await this._callRestApi(systemPrompt, userPrompt);
+        const cleanJson = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+
+        if (parsed.highlightEn) highlightEn = parsed.highlightEn;
+        if (parsed.highlightTa) highlightTa = parsed.highlightTa;
+        if (parsed.scenePrompt) specificScenePrompt = parsed.scenePrompt;
+        if (parsed.caption) captionText = parsed.caption;
+        if (parsed.trendingHashtags) {
+          trendingHashtags = Array.isArray(parsed.trendingHashtags)
+            ? parsed.trendingHashtags.join(' ')
+            : String(parsed.trendingHashtags);
+        }
+      } catch (err) {
+        console.warn('[GeminiService] AI API call warning, using built-in master template:', err.message);
+      }
     }
 
-    const systemPrompt = `You are an elite Christian creative director, theological scholar, and master biblical illustrator.
-Given a Bible verse, carefully study its exact historical context, spiritual meaning, and divine theme.
+    const masterPrompt = this.buildMasterPrompt(verseData, highlightEn, highlightTa, locationTheme);
+    const fullCaption = `${captionText}\n\n• • •\n${trendingHashtags}`;
 
-Generate a strict JSON response following this EXACT MASTERCLASS ARCHITECTURE:
-
-1. "imagePrompt": A highly detailed, photorealistic 8K text-to-image prompt (4:5 vertical aspect ratio).
-   MUST FOLLOW THESE STRICT CINEMATIC RULES:
-   - "BACKGROUND AND SPIRITUAL ATMOSPHERE: Create a breathtaking ancient biblical landscape inspired by [specific historical biblical location matching the verse - e.g. Solomon's Temple in Jerusalem, Mount Sinai, green pastures of Bethlehem, Sea of Galilee at sunrise, Garden of Gethsemane, ancient Roman road, celestial new Jerusalem]."
-   - "LOWER 45%: Show majestic biblical architecture or landscape in the distance, warm divine light illuminating the stone sanctuaries or peaceful waters, subtle floating golden light particles, distant misty mountains, and a peaceful sacred atmosphere representing God's faithfulness."
-   - "UPPER 55%: Deep dramatic dark navy blue and royal blue volumetric clouds with heavenly golden rays breaking through from the upper right, leaving deep dark clean negative space for scripture typography."
-   - "COLOR PALETTE: Cinematic combination of deep navy blue, royal blue, antique gold, and warm ivory. Photorealistic, reverent, majestic, spiritually uplifting, realistic volumetric lighting, extraordinary atmospheric depth."
-
-2. "highlightEn": The exact sacred phrase in the English verse to highlight in subtle golden lettering (e.g., "BLESSED BE THE LORD GOD OF ISRAEL", "THE LORD IS MY SHEPHERD", "FOR GOD SO LOVED THE WORLD", "I CAN DO ALL THINGS THROUGH CHRIST").
-
-3. "highlightTa": The corresponding exact sacred phrase in the Tamil verse to highlight in subtle golden lettering (e.g., "இஸ்ரவேலின் தேவனாகிய கர்த்தருக்கு ஸ்தோத்திரம்", "கர்த்தர் என் மேய்ப்பராயிருக்கிறார்", "தேவன் உலகத்தில் அன்புகூர்ந்தார்").
-
-4. "caption": An inspirational devotional takeaway connecting this verse to daily life, a reflection on God's promises, and a short heartfelt prayer.
-
-5. "trendingHashtags": A list of 15-20 top trending Christian hashtags for Instagram.
-
-Return ONLY the raw JSON object, without markdown code fences or explanation.`;
-
-    const userPrompt = `Verse Reference: ${verseData.referenceEn} | ${verseData.referenceTa}
-English Text: "${verseData.textEn}"
-Tamil Text: "${verseData.textTa}"
-Selected Language: ${language}`;
-
-    try {
-      const rawText = await this._callRestApi(systemPrompt, userPrompt);
-      const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
-
-      let tags = parsed.trendingHashtags || this._createDefaultHashtags(verseData);
-      const hashtagsString = Array.isArray(tags) ? tags.join(' ') : String(tags);
-
-      const fullCaption = `${parsed.caption || this._createDefaultCaption(verseData)}\n\n` +
-        `• • •\n` +
-        `${hashtagsString}`;
-
-      return {
-        imagePrompt: parsed.imagePrompt || this._generateScenePromptForVerse(verseData),
-        highlightEn: parsed.highlightEn || this._detectHighlightEn(verseData.textEn),
-        highlightTa: parsed.highlightTa || this._detectHighlightTa(verseData.textTa),
-        referenceEn: verseData.referenceEn,
-        referenceTa: verseData.referenceTa,
-        captionText: parsed.caption || this._createDefaultCaption(verseData),
-        trendingHashtags: hashtagsString,
-        fullInstagramCaption: fullCaption,
-        language
-      };
-    } catch (err) {
-      console.warn('[GeminiService] Error calling Gemini API, using robust fallback:', err.message);
-      return this._generateFallbackResponse(verseData, language);
-    }
+    return {
+      masterPrompt: masterPrompt,
+      imagePrompt: specificScenePrompt,
+      highlightEn: highlightEn,
+      highlightTa: highlightTa,
+      referenceEn: verseData.referenceEn,
+      referenceTa: verseData.referenceTa,
+      captionText: captionText,
+      trendingHashtags: trendingHashtags,
+      fullInstagramCaption: fullCaption,
+      language
+    };
   }
 
   async _callRestApi(systemPrompt, userPrompt) {
@@ -123,31 +159,26 @@ Selected Language: ${language}`;
     throw lastErr || new Error('All Gemini model endpoints failed.');
   }
 
-  _generateScenePromptForVerse(verseData) {
-    const text = verseData.textEn.toLowerCase();
-    const ref = verseData.referenceEn.toLowerCase();
+  _inferBiblicalLocation(verseData) {
+    const text = (verseData.textEn || '').toLowerCase();
+    const ref = (verseData.referenceEn || '').toLowerCase();
 
-    let theme = "ancient biblical landscape inspired by Solomon's Temple in Jerusalem";
-    let lowerSubject = "majestic ancient stone temple architecture in the distance, warm divine light illuminating the sanctuary, stone balcony foreground with royal golden crown on blue velvet";
-
-    if (/shepherd|pasture|waters|green/i.test(text) || ref.includes('psalm 23')) {
-      theme = "lush green rolling pastures of Judea at morning sunrise";
-      lowerSubject = "peaceful crystal still waters reflecting golden sky, ancient wooden shepherd staff on a stone, soft rolling hills";
-    } else if (/storm|sea|wind|wave|calm|boat/i.test(text) || ref.includes('mark 4') || ref.includes('matt 8')) {
-      theme = "dramatic Sea of Galilee with waves parting in divine peace";
-      lowerSubject = "ancient wooden fishing boat resting on calming water bathed in a direct shaft of celestial light, distant misty shores";
-    } else if (/cross|love|give|son|life|salvation/i.test(text) || ref.includes('john 3')) {
-      theme = "sacred Mount Calvary at dawn of redemption";
-      lowerSubject = "majestic glowing celestial cross atop a distant hill, ethereal golden light illuminating the valley below";
-    } else if (/eagle|strength|mount|wings/i.test(text) || ref.includes('isaiah 40')) {
-      theme = "majestic mountain summits of Israel with eagles soaring";
-      lowerSubject = "towering ancient cedar trees, soaring golden eagle above mountain peaks, glorious morning mist";
-    } else if (/lion|den|faith/i.test(text) || ref.includes('daniel')) {
-      theme = "ancient stone hall of Babylon illuminated by heavenly light";
-      lowerSubject = "peaceful majestic lions resting in an ancient stone cavern, bathed in holy divine beam";
+    if (ref.includes('1 kings') || ref.includes('2 kings') || ref.includes('chronicles') || text.includes('temple') || text.includes('solomon') || text.includes('david')) {
+      return "Solomon’s Temple in Jerusalem with ancient stone terraces, royal stone balcony, and distant hills of Zion";
     }
-
-    return `Create a breathtaking ancient biblical landscape inspired by ${theme}. Show ${lowerSubject} in the lower 45%. Upper 55% shows dramatic dark navy blue and royal blue volumetric clouds with heavenly golden sun rays breaking through, subtle floating golden particles, distant mountains, and a peaceful sacred atmosphere representing God's faithfulness and fulfilled promises. Use a cinematic combination of deep navy blue, royal blue, antique gold, and warm ivory. Photorealistic, reverent, majestic, 8k resolution, vertical 4:5 portrait.`;
+    if (ref.includes('psalm 23') || text.includes('shepherd') || text.includes('green pastures') || text.includes('still waters')) {
+      return "lush green rolling pastures of Judea at morning sunrise with gentle still waters";
+    }
+    if (ref.includes('john 3') || text.includes('cross') || text.includes('calvary') || text.includes('love') || text.includes('salvation')) {
+      return "Mount Calvary at dawn with ethereal celestial radiant golden cross and misty valleys";
+    }
+    if (ref.includes('mark 4') || ref.includes('matthew 8') || text.includes('sea') || text.includes('storm') || text.includes('calm')) {
+      return "Sea of Galilee with dramatic crashing waves parting around a wooden boat in celestial light";
+    }
+    if (ref.includes('isaiah 40') || text.includes('eagle') || text.includes('wings') || text.includes('mountains')) {
+      return "majestic mountain summits of Israel with golden eagles soaring above clouds";
+    }
+    return "Solomon’s Temple in Jerusalem with sacred architecture, ancient stone balustrades, and heavenly rays";
   }
 
   _detectHighlightEn(text) {
@@ -174,11 +205,15 @@ Selected Language: ${language}`;
   }
 
   _generateFallbackResponse(verseData, language) {
-    const scenePrompt = this._generateScenePromptForVerse(verseData);
     const highlightEn = this._detectHighlightEn(verseData.textEn);
     const highlightTa = this._detectHighlightTa(verseData.textTa);
+    const locationTheme = this._inferBiblicalLocation(verseData);
+    const masterPrompt = this.buildMasterPrompt(verseData, highlightEn, highlightTa, locationTheme);
+
+    const scenePrompt = `A breathtaking ancient biblical landscape inspired by ${locationTheme}. Lower 45% shows majestic temple architecture in the distance, warm divine light illuminating the sanctuary, subtle floating golden particles, distant mountains. Upper 55% shows dramatic dark navy blue and royal blue volumetric clouds with heavenly golden sun rays breaking through from the upper right, leaving clean negative space for typography. Cinematic deep navy blue, royal blue, antique gold, and warm ivory palette. Photorealistic 8k, reverent, majestic, vertical 4:5 portrait.`;
 
     return {
+      masterPrompt: masterPrompt,
       imagePrompt: scenePrompt,
       highlightEn: highlightEn,
       highlightTa: highlightTa,

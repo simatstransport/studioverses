@@ -155,14 +155,17 @@
 
         <!-- AI Details Card -->
         <div class="glass-card details-card" id="aiDetailsCard">
-          <h3 class="card-title-sm">Theological Hook & Art Prompt</h3>
-          <div class="detail-row">
-            <span class="detail-label">Hook:</span>
-            <span class="detail-val" id="hookVal">Fulfilled By His Mighty Hand</span>
+          <div class="card-header-flex">
+            <h3 class="card-title-sm">Active Master Prompt</h3>
+            <button class="btn btn-secondary btn-sm" id="btnCopyMasterPrompt">📋 Copy</button>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Prompt:</span>
-            <p class="detail-prompt" id="promptVal">Cinematic lighting, golden hour backlight, deep dark moody shadows, highly detailed photorealistic digital art, leaving dark negative space on the right side for text...</p>
+            <span class="detail-label">Theme:</span>
+            <span class="detail-val" id="hookVal">Solomon’s Temple in Jerusalem</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Master Prompt Specification:</span>
+            <textarea id="promptVal" class="detail-prompt-area" rows="6" readonly>Create a premium, ultra-realistic Christian Bible verse poster featuring 1 Kings 8:15 in both English and Tamil...</textarea>
           </div>
         </div>
       </section>

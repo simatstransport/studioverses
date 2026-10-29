@@ -4,13 +4,17 @@ const imageService = require('./services/imageService');
 const posterEngine = require('./services/posterEngine');
 const fs = require('fs');
 
-async function testPsalm73() {
-  console.log('--- Testing Psalm 73:2 with Holy Bible Filler & Tamil Font Fix ---');
+async function testMasterPromptPipeline() {
+  console.log('--- Testing 1 Kings 8:15 with Master Prompt ---');
 
-  const verse = await dbService.getVerse('Psalm 73:2');
-  console.log('✓ Verse loaded:', verse.referenceEn, '|', verse.referenceTa);
+  const verse = await dbService.getVerse('1 Kings 8:15');
+  console.log('✓ Scripture Loaded:', verse.referenceEn, '|', verse.referenceTa);
 
   const ai = await geminiService.analyzeVerse(verse, 'both');
+  console.log('\n--- EXACT MASTER PROMPT GENERATED ---');
+  console.log(ai.masterPrompt);
+  console.log('-------------------------------------\n');
+
   console.log('✓ Highlight EN:', ai.highlightEn);
   console.log('✓ Highlight TA:', ai.highlightTa);
 
@@ -29,8 +33,8 @@ async function testPsalm73() {
   });
 
   fs.mkdirSync('public/generated', { recursive: true });
-  fs.writeFileSync('public/generated/test_psalm73.jpg', poster);
-  console.log('✓ Successfully rendered Psalm 73:2 poster! Saved to public/generated/test_psalm73.jpg');
+  fs.writeFileSync('public/generated/test_verified.jpg', poster);
+  console.log('✓ Masterpiece poster successfully saved to public/generated/test_verified.jpg');
 }
 
-testPsalm73().catch(console.error);
+testMasterPromptPipeline().catch(console.error);

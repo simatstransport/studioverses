@@ -470,6 +470,29 @@ textarea:focus {
   font-weight: 500;
 }
 
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.detail-prompt-area {
+  width: 100%;
+  color: #cfd8ea;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(249, 211, 113, 0.25);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--font-sans);
+  resize: vertical;
+}
+
 .detail-prompt {
   color: #8c97af;
   font-size: 11px;
