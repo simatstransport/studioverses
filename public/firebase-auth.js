@@ -67,8 +67,9 @@ if (typeof firebase !== 'undefined') {
   // Logout button
   if (btnLogout) {
     btnLogout.addEventListener('click', async () => {
+      sessionStorage.removeItem('scripture_guest');
       await auth.signOut();
-      window.location.reload();
+      window.location.replace('/login.html');
     });
   }
 }

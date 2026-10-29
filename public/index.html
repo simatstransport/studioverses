@@ -23,8 +23,9 @@
       measurementId: "G-HEZV6KNJL0"
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const isGuest = sessionStorage.getItem('scripture_guest') === 'true';
     firebase.auth().onAuthStateChanged((user) => {
-      if (!user) {
+      if (!user && !isGuest) {
         window.location.replace('/login.html');
       } else {
         document.documentElement.classList.add('auth-verified');

@@ -153,3 +153,13 @@ function hideAlert() {
   authAlert.innerHTML = '';
   authAlert.classList.add('hidden');
 }
+
+// 4. Continue as Guest Handler
+const btnGuest = document.querySelector('.btn-guest');
+if (btnGuest) {
+  btnGuest.addEventListener('click', (e) => {
+    e.preventDefault();
+    sessionStorage.setItem('scripture_guest', 'true');
+    window.location.href = '/';
+  });
+}
