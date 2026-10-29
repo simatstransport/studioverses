@@ -102,13 +102,15 @@ class CronService {
       const bgBuffer = await imageService.generateBackground(aiAnalysis.imagePrompt, verseData.referenceEn);
 
       // 4. Composite 1080x1350 poster with Canvas
-      log('Compositing 1080x1350 typography poster with Canvas...');
+      log('Compositing 1080x1350 luxury typography poster matching premium reference...');
       const posterBuffer = await posterEngine.renderPoster({
         backgroundImage: bgBuffer,
-        shortHook: aiAnalysis.shortHook,
-        reference: aiAnalysis.reference,
+        referenceEn: verseData.referenceEn,
+        referenceTa: verseData.referenceTa,
         verseTextEn: verseData.textEn,
         verseTextTa: verseData.textTa,
+        highlightEn: aiAnalysis.highlightEn,
+        highlightTa: aiAnalysis.highlightTa,
         language: targetLang
       });
 

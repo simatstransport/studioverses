@@ -2,13 +2,12 @@ const path = require('path');
 const fs = require('fs');
 const config = require('../config');
 
-// Select Canvas provider (prefer @napi-rs/canvas, fallback to canvas)
+// Select Canvas provider
 let canvasLib;
 let isNapi = false;
 
 try {
-  const napi = require('@napi-rs/canvas');
-  canvasLib = napi;
+  canvasLib = require('@napi-rs/canvas');
   isNapi = true;
 } catch (e1) {
   try {
@@ -48,9 +47,8 @@ class PosterEngine {
           } else if (canvasLib.registerFont) {
             canvasLib.registerFont(fullPath, { family: f.family, weight: f.weight });
           }
-          console.log(`[PosterEngine] Registered font: ${f.family}`);
         } catch (err) {
-          console.warn(`[PosterEngine] Could not register font ${f.file}:`, err.message);
+          console.warn(`[PosterEngine] Font load warning: ${f.file}`);
         }
       }
     }
@@ -59,21 +57,22 @@ class PosterEngine {
   }
 
   /**
-   * Main compositing function: produces a 1080x1350 JPEG/PNG buffer
-   * @param {Object} options
-   * @param {Buffer|string} options.backgroundImage - Buffer or path to image
-   * @param {string} options.shortHook - Comforting English hook
-   * @param {string} options.reference - e.g. "1 KINGS 8:15"
-   * @param {string} options.verseTextEn - English verse text
-   * @param {string} options.verseTextTa - Tamil verse text
-   * @param {string} options.language - 'en' | 'ta' | 'both'
+   * Main rendering function strictly matching the reference image layout:
+   * 1. Top Header: — HOLY BIBLE VERSE — in embossed gold with flanking lines
+   * 2. Centered English verse with sacred/key words in BOLD GOLD
+   * 3. Ornate gold divider: ─── ❖ ───
+   * 4. Centered Tamil verse with sacred/key words in BOLD GOLD
+   * 5. Centered reference: 1 KINGS 8:15  |  1 இராஜாக்கள் 8:15
+   * 6. Cinematic background art in lower half, dark moody volumetric clouds in upper half
    */
   async renderPoster({
     backgroundImage,
-    shortHook = 'I Know You Are Always With Me',
-    reference = '1 KINGS 8:15',
+    referenceEn = '1 KINGS 8:15',
+    referenceTa = '1 இராஜாக்கள் 8:15',
     verseTextEn = '',
     verseTextTa = '',
+    highlightEn = '',
+    highlightTa = '',
     language = 'both'
   }) {
     const width = 1080;
@@ -84,49 +83,108 @@ class PosterEngine {
     // 1. Draw Background Image
     if (backgroundImage) {
       let img;
-      if (Buffer.isBuffer(backgroundImage)) {
-        img = await loadImage(backgroundImage);
-      } else if (typeof backgroundImage === 'string') {
+      if (Buffer.isBuffer(backgroundImage) || typeof backgroundImage === 'string') {
         img = await loadImage(backgroundImage);
       }
-
       if (img) {
-        // Draw image covering 1080x1350, centered
         this._drawImageCover(ctx, img, 0, 0, width, height);
       }
     } else {
-      // Dark fallback background
-      ctx.fillStyle = '#0f111a';
+      // Dark fallback
+      ctx.fillStyle = '#0b0f19';
       ctx.fillRect(0, 0, width, height);
     }
 
-    // 2. Cinematic Gradient Overlays (Dark moody right side & bottom for text legibility)
-    this._applyCinematicOverlays(ctx, width, height);
+    // 2. Cinematic Gradient Overlay (Dark in upper half for text legibility, transparent in lower half for scenery)
+    this._applyCinematicTopOverlay(ctx, width, height);
 
-    // 3. Subtle framing border
-    this._drawEleganceFrame(ctx, width, height);
+    // 3. Header: — HOLY BIBLE VERSE —
+    this._renderHeader(ctx, width, 105);
 
-    // 4. Render Top-Right / Upper Hook
-    // Mix two fonts: Bold Serif (Gold) + Cursive Script (White) + Curved golden underline
-    this._renderHookText(ctx, shortHook, width, height);
+    // 4. Centered Scripture Layout
+    let currentY = 195;
 
-    // 5. Render Verse Text (Scripture block)
-    this._renderVerseBlock(ctx, {
-      verseTextEn,
-      verseTextTa,
-      language,
-      width,
-      height
-    });
+    if (language === 'both') {
+      // English Scripture
+      currentY = this._renderScriptureText(ctx, {
+        text: verseTextEn,
+        highlightPhrase: highlightEn || this._detectHighlightEn(verseTextEn),
+        fontRegular: '30px "Lora", Georgia, serif',
+        fontBold: 'bold 32px "Cinzel", "Playfair Display", Georgia, serif',
+        colorRegular: '#FFFFFF',
+        colorHighlight: '#F8D775',
+        maxWidth: 780,
+        startY: currentY,
+        lineHeight: 46,
+        isEnglish: true
+      });
 
-    // 6. Render Bottom Decorative Divider & Reference
-    this._renderReferenceFooter(ctx, reference, width, height);
+      // Ornate Center Divider (─── ❖ ───)
+      currentY += 28;
+      this._renderOrnateDivider(ctx, width / 2, currentY);
+      currentY += 46;
+
+      // Tamil Scripture
+      currentY = this._renderScriptureText(ctx, {
+        text: verseTextTa,
+        highlightPhrase: highlightTa || this._detectHighlightTa(verseTextTa),
+        fontRegular: '28px "Mukta Malar", "Latha", sans-serif',
+        fontBold: 'bold 31px "Mukta Malar", "Latha", sans-serif',
+        colorRegular: '#F3EFE6',
+        colorHighlight: '#F8D775',
+        maxWidth: 800,
+        startY: currentY,
+        lineHeight: 48,
+        isEnglish: false
+      });
+
+      // Reference Line
+      currentY += 34;
+      const refString = `${referenceEn.toUpperCase()}   |   ${referenceTa}`;
+      this._renderReference(ctx, refString, width / 2, currentY);
+
+    } else if (language === 'ta') {
+      // Tamil Only (Larger typography)
+      currentY = this._renderScriptureText(ctx, {
+        text: verseTextTa,
+        highlightPhrase: highlightTa || this._detectHighlightTa(verseTextTa),
+        fontRegular: '36px "Mukta Malar", "Latha", sans-serif',
+        fontBold: 'bold 39px "Mukta Malar", "Latha", sans-serif',
+        colorRegular: '#FFFFFF',
+        colorHighlight: '#F8D775',
+        maxWidth: 820,
+        startY: 320,
+        lineHeight: 56,
+        isEnglish: false
+      });
+
+      currentY += 42;
+      this._renderReference(ctx, referenceTa, width / 2, currentY);
+
+    } else {
+      // English Only
+      currentY = this._renderScriptureText(ctx, {
+        text: verseTextEn,
+        highlightPhrase: highlightEn || this._detectHighlightEn(verseTextEn),
+        fontRegular: '36px "Lora", Georgia, serif',
+        fontBold: 'bold 38px "Cinzel", "Playfair Display", Georgia, serif',
+        colorRegular: '#FFFFFF',
+        colorHighlight: '#F8D775',
+        maxWidth: 820,
+        startY: 320,
+        lineHeight: 56,
+        isEnglish: true
+      });
+
+      currentY += 42;
+      this._renderReference(ctx, referenceEn.toUpperCase(), width / 2, currentY);
+    }
 
     return canvas.toBuffer('image/jpeg');
   }
 
   /**
-   * Scales and centers image to cover the canvas
+   * Scales image to cover canvas exactly
    */
   _drawImageCover(ctx, img, x, y, w, h) {
     const imgRatio = img.width / img.height;
@@ -149,340 +207,218 @@ class PosterEngine {
   }
 
   /**
-   * Applies sophisticated gradients to guarantee text legibility without washing out the art
+   * Applies subtle atmospheric gradient:
+   * Dark in upper 55% for crisp typography, transparent in lower 45% to reveal the scenery
    */
-  _applyCinematicOverlays(ctx, width, height) {
+  _applyCinematicTopOverlay(ctx, width, height) {
     ctx.save();
 
-    // Overall subtle vignette
-    const vignette = ctx.createRadialGradient(
-      width * 0.5, height * 0.5, width * 0.3,
-      width * 0.5, height * 0.5, width * 0.85
+    // Soft dark gradient focused on the upper half
+    const topGrad = ctx.createLinearGradient(0, 0, 0, height * 0.72);
+    topGrad.addColorStop(0, 'rgba(4, 7, 14, 0.82)');
+    topGrad.addColorStop(0.35, 'rgba(6, 10, 20, 0.72)');
+    topGrad.addColorStop(0.65, 'rgba(8, 12, 22, 0.45)');
+    topGrad.addColorStop(0.88, 'rgba(0, 0, 0, 0.15)');
+    topGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = topGrad;
+    ctx.fillRect(0, 0, width, height * 0.75);
+
+    // Subtle radial spotlight behind center text
+    const centerGlow = ctx.createRadialGradient(
+      width / 2, 420, 50,
+      width / 2, 420, 480
     );
-    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vignette.addColorStop(0.7, 'rgba(0, 0, 0, 0.45)');
-    vignette.addColorStop(1, 'rgba(5, 7, 12, 0.85)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, width, height);
-
-    // Dark moody gradient focused on right-half and bottom
-    const rightGrad = ctx.createLinearGradient(width * 0.25, 0, width, height * 0.9);
-    rightGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    rightGrad.addColorStop(0.4, 'rgba(6, 8, 14, 0.55)');
-    rightGrad.addColorStop(0.75, 'rgba(4, 5, 10, 0.88)');
-    rightGrad.addColorStop(1, 'rgba(2, 3, 6, 0.95)');
-    ctx.fillStyle = rightGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Bottom grounding gradient for the reference and footer
-    const bottomGrad = ctx.createLinearGradient(0, height * 0.7, 0, height);
-    bottomGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    bottomGrad.addColorStop(1, 'rgba(2, 3, 6, 0.9)');
-    ctx.fillStyle = bottomGrad;
-    ctx.fillRect(0, height * 0.7, width, height * 0.3);
+    centerGlow.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    centerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = centerGlow;
+    ctx.fillRect(0, 0, width, height * 0.7);
 
     ctx.restore();
   }
 
   /**
-   * Draws a very subtle, high-end outer gold border line
+   * Header: — HOLY BIBLE VERSE — in Gold Cinzel with flanking lines
    */
-  _drawEleganceFrame(ctx, width, height) {
+  _renderHeader(ctx, width, y) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(249, 211, 113, 0.22)';
-    ctx.lineWidth = 1;
-    const inset = 40;
-    ctx.strokeRect(inset, inset, width - inset * 2, height - inset * 2);
 
-    // Inner subtle corner notches
-    const cornerSize = 14;
-    ctx.strokeStyle = 'rgba(249, 211, 113, 0.55)';
-    ctx.lineWidth = 1.5;
+    const text = 'HOLY BIBLE VERSE';
+    ctx.font = 'bold 36px "Cinzel", "Playfair Display", Georgia, serif';
+    ctx.fillStyle = '#F8D775';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
-    // Top-Left
-    ctx.beginPath();
-    ctx.moveTo(inset, inset + cornerSize);
-    ctx.lineTo(inset, inset);
-    ctx.lineTo(inset + cornerSize, inset);
-    ctx.stroke();
-
-    // Top-Right
-    ctx.beginPath();
-    ctx.moveTo(width - inset - cornerSize, inset);
-    ctx.lineTo(width - inset, inset);
-    ctx.lineTo(width - inset, inset + cornerSize);
-    ctx.stroke();
-
-    // Bottom-Left
-    ctx.beginPath();
-    ctx.moveTo(inset, height - inset - cornerSize);
-    ctx.lineTo(inset, height - inset);
-    ctx.lineTo(inset + cornerSize, height - inset);
-    ctx.stroke();
-
-    // Bottom-Right
-    ctx.beginPath();
-    ctx.moveTo(width - inset - cornerSize, height - inset);
-    ctx.lineTo(width - inset, height - inset);
-    ctx.lineTo(width - inset, height - inset - cornerSize);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  /**
-   * Renders Hook Text:
-   * Bold Serif in Gold (#F9D371) + Cursive Script in White ('Great Vibes')
-   * With golden curved underline graphic beneath it
-   */
-  _renderHookText(ctx, hookString, width, height) {
-    if (!hookString) return;
-
-    ctx.save();
-    const cleanHook = hookString.trim();
-    const words = cleanHook.split(/\s+/);
-
-    // Split words: first portion in Serif Gold, last 1-2 words in Cursive Script White
-    let serifWords = [];
-    let scriptWords = [];
-
-    if (words.length <= 2) {
-      serifWords = [words[0]];
-      scriptWords = words.slice(1);
-    } else if (words.length <= 4) {
-      serifWords = words.slice(0, 2);
-      scriptWords = words.slice(2);
-    } else {
-      serifWords = words.slice(0, Math.ceil(words.length * 0.55));
-      scriptWords = words.slice(Math.ceil(words.length * 0.55));
-    }
-
-    const serifText = serifWords.join(' ').toUpperCase();
-    const scriptText = scriptWords.join(' ');
-
-    const rightMargin = width - 85;
-    const startY = 165;
-
-    // 1. Serif Gold Line (Playfair Display / Cinzel)
-    ctx.font = 'bold 36px "Playfair Display", "Cinzel", Georgia, serif';
-    ctx.fillStyle = '#F9D371';
-    ctx.textAlign = 'right';
+    // Soft gold glow + shadow
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
-    ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 2;
-    ctx.fillText(serifText, rightMargin, startY);
 
-    // 2. Script White Line (Great Vibes)
-    let scriptY = startY + 68;
-    if (scriptText) {
-      ctx.font = '54px "Great Vibes", "Brush Script MT", cursive';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-      ctx.shadowBlur = 14;
-      ctx.fillText(scriptText, rightMargin, scriptY);
-    } else {
-      scriptY = startY;
-    }
+    const metrics = ctx.measureText(text);
+    const textWidth = metrics.width;
+    const spacing = 35;
+    const lineWidth = 130;
 
-    // 3. Golden Curved Underline Graphic beneath the hook
-    const underlineY = scriptY + 22;
-    const curveWidth = 240;
-    const curveStartX = rightMargin - curveWidth;
-    const curveEndX = rightMargin;
+    // Center Text
+    ctx.fillText(text, width / 2, y);
 
-    ctx.strokeStyle = '#F9D371';
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = 'rgba(249, 211, 113, 0.5)';
+    // Left Flanking Gold Line
+    ctx.strokeStyle = '#E5B842';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(249, 211, 113, 0.4)';
     ctx.shadowBlur = 8;
 
+    const leftEndX = (width / 2) - (textWidth / 2) - spacing;
+    const leftStartX = leftEndX - lineWidth;
     ctx.beginPath();
-    ctx.moveTo(curveStartX, underlineY);
-    // Graceful curve
-    ctx.bezierCurveTo(
-      curveStartX + 60, underlineY + 12,
-      curveEndX - 60, underlineY + 14,
-      curveEndX, underlineY
-    );
+    ctx.moveTo(leftStartX, y);
+    ctx.lineTo(leftEndX, y);
     ctx.stroke();
 
-    // Delicate accent diamond at the end of the curve
-    ctx.fillStyle = '#F9D371';
+    // Right Flanking Gold Line
+    const rightStartX = (width / 2) + (textWidth / 2) + spacing;
+    const rightEndX = rightStartX + lineWidth;
     ctx.beginPath();
-    const diamondX = curveEndX - 10;
-    const diamondY = underlineY + 7;
-    ctx.moveTo(diamondX, diamondY - 4);
-    ctx.lineTo(diamondX + 4, diamondY);
-    ctx.lineTo(diamondX, diamondY + 4);
-    ctx.lineTo(diamondX - 4, diamondY);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(rightStartX, y);
+    ctx.lineTo(rightEndX, y);
+    ctx.stroke();
 
     ctx.restore();
   }
 
   /**
-   * Renders the Scripture text block (English, Tamil, or Both)
+   * Ornate Center Divider: ─── ❖ ───
    */
-  _renderVerseBlock(ctx, { verseTextEn, verseTextTa, language, width, height }) {
+  _renderOrnateDivider(ctx, centerX, y) {
     ctx.save();
 
-    const rightMargin = width - 85;
-    const maxWidth = 580; // keep in right-half negative space
-    const centerY = height * 0.58;
+    const lineWidth = 140;
+    const gap = 24;
 
-    ctx.textAlign = 'right';
+    ctx.strokeStyle = '#E5B842';
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 8;
+
+    // Left Line
+    ctx.beginPath();
+    ctx.moveTo(centerX - gap - lineWidth, y);
+    ctx.lineTo(centerX - gap, y);
+    ctx.stroke();
+
+    // Right Line
+    ctx.beginPath();
+    ctx.moveTo(centerX + gap, y);
+    ctx.lineTo(centerX + gap + lineWidth, y);
+    ctx.stroke();
+
+    // Central Ornate Emblem (Floriated Diamond / Cross)
+    ctx.fillStyle = '#F8D775';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '22px serif';
+    ctx.shadowColor = 'rgba(249, 211, 113, 0.6)';
+    ctx.shadowBlur = 10;
+    ctx.fillText('❖', centerX, y);
+
+    ctx.restore();
+  }
+
+  /**
+   * Reference Line: 1 KINGS 8:15  |  1 இராஜாக்கள் 8:15
+   */
+  _renderReference(ctx, refString, centerX, y) {
+    ctx.save();
+
+    ctx.font = 'bold 21px "Cinzel", "Playfair Display", Georgia, serif';
+    ctx.fillStyle = '#E5C068';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+
+    ctx.fillText(refString, centerX, y);
+    ctx.restore();
+  }
+
+  /**
+   * Renders scripture lines, centering them and applying BOLD GOLD highlight to sacred phrases
+   */
+  _renderScriptureText(ctx, {
+    text,
+    highlightPhrase,
+    fontRegular,
+    fontBold,
+    colorRegular,
+    colorHighlight,
+    maxWidth,
+    startY,
+    lineHeight,
+    isEnglish
+  }) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
     ctx.shadowBlur = 14;
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 2;
 
-    if (language === 'both' && verseTextEn && verseTextTa) {
-      // Bilingual Rendering: English on top, subtle divider, Tamil below
-      ctx.font = '31px "Lora", Georgia, serif';
-      ctx.fillStyle = '#FDFDFD';
-      const enLines = this._wrapText(ctx, `"${verseTextEn}"`, maxWidth);
-      const enLineHeight = 44;
+    const formatted = `“${text.trim()}”`;
+    const cleanHighlight = highlightPhrase ? highlightPhrase.trim() : '';
 
-      ctx.font = 'bold 28px "Mukta Malar", "Latha", "Noto Sans Tamil", sans-serif';
-      ctx.fillStyle = '#F2EBD9';
-      const taLines = this._wrapText(ctx, `"${verseTextTa}"`, maxWidth);
-      const taLineHeight = 42;
+    // Wrap into lines
+    ctx.font = fontRegular;
+    const lines = this._wrapText(ctx, formatted, maxWidth);
 
-      const totalBlockHeight =
-        enLines.length * enLineHeight +
-        40 + // divider gap
-        taLines.length * taLineHeight;
+    let currentY = startY;
 
-      let currentY = centerY - totalBlockHeight / 2 + 30;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
 
-      // Draw English lines
-      ctx.font = '31px "Lora", Georgia, serif';
-      ctx.fillStyle = '#FDFDFD';
-      for (const line of enLines) {
-        ctx.fillText(line, rightMargin, currentY);
-        currentY += enLineHeight;
+      // Check if this line contains the highlight phrase or sacred keywords
+      const isHighlighted = cleanHighlight && (
+        line.toLowerCase().includes(cleanHighlight.toLowerCase()) ||
+        cleanHighlight.toLowerCase().includes(line.toLowerCase().replace(/[“”,;.]/g, '').trim())
+      ) || (isEnglish && this._isSacredLineEn(line)) || (!isEnglish && this._isSacredLineTa(line));
+
+      if (isHighlighted) {
+        ctx.font = fontBold;
+        ctx.fillStyle = colorHighlight;
+        // Text in highlight line in English is often rendered upper-case for emphasis like sample
+        const displayText = (isEnglish && isHighlighted) ? line.toUpperCase() : line;
+        ctx.fillText(displayText, 540, currentY);
+      } else {
+        ctx.font = fontRegular;
+        ctx.fillStyle = colorRegular;
+        ctx.fillText(line, 540, currentY);
       }
 
-      // Subtle decorative divider between languages
-      currentY += 8;
-      ctx.strokeStyle = 'rgba(249, 211, 113, 0.45)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(rightMargin - 180, currentY);
-      ctx.lineTo(rightMargin, currentY);
-      ctx.stroke();
-
-      // Small central diamond
-      ctx.fillStyle = '#F9D371';
-      ctx.beginPath();
-      const dotX = rightMargin - 90;
-      ctx.arc(dotX, currentY, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      currentY += 32;
-
-      // Draw Tamil lines
-      ctx.font = 'bold 27px "Mukta Malar", "Latha", "Noto Sans Tamil", sans-serif';
-      ctx.fillStyle = '#F4EDE0';
-      for (const line of taLines) {
-        ctx.fillText(line, rightMargin, currentY);
-        currentY += taLineHeight;
-      }
-
-    } else if (language === 'ta' && verseTextTa) {
-      // Tamil Only
-      ctx.font = 'bold 36px "Mukta Malar", "Latha", "Noto Sans Tamil", sans-serif';
-      ctx.fillStyle = '#FFFFFF';
-      const lines = this._wrapText(ctx, `"${verseTextTa}"`, maxWidth);
-      const lineHeight = 54;
-      let currentY = centerY - (lines.length * lineHeight) / 2;
-
-      for (const line of lines) {
-        ctx.fillText(line, rightMargin, currentY);
-        currentY += lineHeight;
-      }
-
-    } else {
-      // English Only
-      ctx.font = '36px "Lora", Georgia, serif';
-      ctx.fillStyle = '#FFFFFF';
-      const lines = this._wrapText(ctx, `"${verseTextEn || verseTextTa}"`, maxWidth);
-      const lineHeight = 54;
-      let currentY = centerY - (lines.length * lineHeight) / 2;
-
-      for (const line of lines) {
-        ctx.fillText(line, rightMargin, currentY);
-        currentY += lineHeight;
-      }
+      currentY += lineHeight;
     }
 
     ctx.restore();
+    return currentY;
   }
 
-  /**
-   * Renders Decorative Divider (thin line + cross ┼ + thin line) and Gold All-Caps Reference
-   */
-  _renderReferenceFooter(ctx, referenceString, width, height) {
-    if (!referenceString) return;
-
-    ctx.save();
-    const rightMargin = width - 85;
-    const footerY = height - 145;
-
-    // Decorative Divider (right-aligned under verse block)
-    const dividerWidth = 320;
-    const dividerX = rightMargin - dividerWidth / 2;
-    const lineHalf = 135;
-
-    ctx.strokeStyle = 'rgba(249, 211, 113, 0.7)';
-    ctx.lineWidth = 1.2;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 8;
-
-    // Left segment
-    ctx.beginPath();
-    ctx.moveTo(dividerX - lineHalf, footerY);
-    ctx.lineTo(dividerX - 18, footerY);
-    ctx.stroke();
-
-    // Cross icon ┼ in the center
-    ctx.fillStyle = '#F9D371';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '22px serif';
-    ctx.fillText('┼', dividerX, footerY - 1);
-
-    // Right segment
-    ctx.beginPath();
-    ctx.moveTo(dividerX + 18, footerY);
-    ctx.lineTo(dividerX + lineHalf, footerY);
-    ctx.stroke();
-
-    // Scripture Reference (All-Caps Serif in Gold with wide letter spacing)
-    ctx.font = 'bold 22px "Cinzel", "Playfair Display", Georgia, serif';
-    ctx.fillStyle = '#F9D371';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 2;
-
-    const spacedText = this._addLetterSpacing(referenceString.toUpperCase(), 3);
-    ctx.fillText(spacedText, dividerX, footerY + 36);
-
-    ctx.restore();
+  _isSacredLineEn(line) {
+    return /\b(LORD GOD|LORD|BLESSED BE THE LORD|JESUS|GOD OF ISRAEL)\b/i.test(line);
   }
 
-  /**
-   * Simulates letter spacing by inserting spaces
-   */
-  _addLetterSpacing(text, spaces = 2) {
-    return text.split('').join(' '.repeat(spaces));
+  _isSacredLineTa(line) {
+    return /(கர்த்தருக்கு ஸ்தோத்திரம்|தேவனாகிய கர்த்தர்|இயேசு கிறிஸ்து|தேவன்)/.test(line);
   }
 
-  /**
-   * Helper function to wrap text within maximum width
-   */
+  _detectHighlightEn(text) {
+    const match = text.match(/\b(Blessed be the LORD God of Israel|Blessed be the LORD|The LORD is my shepherd|For God so loved the world|I can do all things through Christ|Trust in the LORD with all thine heart)\b/i);
+    return match ? match[0] : 'Blessed be the LORD God of Israel';
+  }
+
+  _detectHighlightTa(text) {
+    const match = text.match(/(இஸ்ரவேலின் தேவனாகிய கர்த்தருக்கு ஸ்தோத்திரம்|கர்த்தருக்கு ஸ்தோத்திரம்|கர்த்தர் என் மேய்ப்பராயிருக்கிறார்|தேவன் உலகத்தில் அன்புகூர்ந்தார்)/);
+    return match ? match[0] : 'கர்த்தருக்கு ஸ்தோத்திரம்';
+  }
+
   _wrapText(ctx, text, maxWidth) {
     const words = text.split(/\s+/);
     const lines = [];

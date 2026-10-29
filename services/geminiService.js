@@ -4,29 +4,14 @@ const config = require('../config');
 class GeminiService {
   constructor() {
     this.apiKey = config.geminiApiKey;
-    this.client = null;
-    this._initClient();
-  }
-
-  _initClient() {
-    if (!this.apiKey) return;
-    try {
-      const { GoogleGenAI } = require('@google/genai');
-      this.client = new GoogleGenAI({ apiKey: this.apiKey });
-    } catch (err) {
-      console.warn('[GeminiService] SDK init failed, will use direct REST fallback:', err.message);
-    }
   }
 
   setApiKey(key) {
     this.apiKey = key;
-    this._initClient();
   }
 
   /**
-   * Generates hook, image prompt, typography instructions and caption from verse
-   * @param {Object} verseData - { referenceEn, referenceTa, textEn, textTa, bookNum, chapter, verse }
-   * @param {string} language - 'en' | 'ta' | 'both'
+   * Generates custom verse-matched scene prompt, sacred highlights, and viral caption
    */
   async analyzeVerse(verseData, language = 'both') {
     const scriptureText = language === 'ta'
@@ -45,17 +30,26 @@ class GeminiService {
       return this._generateFallbackResponse(verseData, language);
     }
 
-    const systemPrompt = `You are an elite Christian creative art director and viral social media strategist.
-Given a Bible verse, analyze its spiritual emotion, promise, and theological context.
-Generate a strict JSON response containing:
-1. "shortHook": A short, comforting, emotionally resonant summarizing phrase in English (3 to 7 words, e.g. "Fulfilled By His Mighty Hand", "His Grace Is Always Sufficient", "Peace In The Storm", "Do Not Fear I Am With You").
-2. "imagePrompt": A highly detailed text-to-image prompt to generate a 4:5 vertical background artwork.
-   IT MUST STRICTLY INCLUDE THESE EXACT WORDS: "Cinematic lighting, golden hour backlight, deep dark moody shadows, highly detailed photorealistic digital art, leaving dark negative space on the right side for text."
-   Subject matches verse emotion (e.g., Jesus comforting a person, glowing cross on a mountain at twilight, stormy seas calmed, ancient temple at dusk).
-3. "verseText": The exact scripture text.
-4. "reference": Capitalized reference (e.g. "${verseData.referenceEn.toUpperCase()}").
-5. "caption": A powerful, engaging Instagram caption formatted with emojis, a reflective spiritual takeaway connecting the verse to daily life, a brief prayer, and the scripture text in English and Tamil.
-6. "trendingHashtags": A string containing top daily trending Christian hashtags tailored to the verse theme (mix of viral tags, high-reach tags, KJV tags, and Tamil Christian tags, e.g. #DailyBibleVerse #BibleVerseOfTheDay #FaithOverFear #GodsPromises #GraceUponGrace #JesusChrist #KJV #TamilChristian #TamilBibleVerse #ScriptureOfTheDay).
+    const systemPrompt = `You are a world-class Christian creative director and cinematic biblical illustrator.
+Given a Bible verse, carefully analyze its historical context, story, imagery, and sacred meaning.
+Generate a strict JSON response with:
+1. "imagePrompt": A highly detailed, realistic, cinematic 3D digital art prompt (4:5 vertical aspect ratio).
+   CRITICAL COMPOSITION RULES:
+   - LOWER HALF (bottom 50%): Must contain a breathtaking panoramic physical scene SPECIFIC TO THIS VERSE'S EXACT BIBLICAL THEME.
+     Examples:
+     * 1 Kings 8:15 -> "Panoramic view of ancient Solomon Temple in Jerusalem at golden hour sunrise, stone balustrade in foreground with a royal golden crown on blue velvet, glowing morning light illuminating stone columns and hills."
+     * Psalm 23 -> "Lush green rolling pastures of Judea at morning sunrise, crystal-clear still stream reflecting golden sky, ancient shepherd staff on a stone."
+     * Matthew 8 (Peace in storm) -> "Stormy Sea of Galilee with dramatic crashing waves parting around a wooden fishing boat bathed in a supernatural shaft of celestial golden light."
+     * John 3:16 / Cross -> "Majestic glowing radiant cross atop Mount Calvary at celestial dawn, rolling misty valleys below, ethereal golden god rays."
+     * Genesis 1 -> "Creation of light, dramatic planet earth forming in the cosmos with radiant golden light piercing primordial cosmic mist."
+     * Exodus 14 -> "Parted Red Sea towering like crystalline walls of water with the divine pillar of fire guiding the pathway."
+   - UPPER HALF (top 50%): Must consist of deep, dark, dramatic volumetric storm clouds with intense golden god rays breaking through, leaving clean negative space for centered typography.
+   - STYLE: "Cinematic lighting, god rays from top right, 8k resolution, photorealistic, rich warm golden hour colors, biblical masterpiece."
+
+2. "highlightEn": The key sacred words or divine blessing phrase to highlight in BOLD GOLD (e.g. "BLESSED BE THE LORD GOD OF ISRAEL", "THE LORD IS MY SHEPHERD", "FOR GOD SO LOVED THE WORLD", "I CAN DO ALL THINGS").
+3. "highlightTa": The corresponding sacred words or divine blessing phrase in Tamil to highlight in BOLD GOLD (e.g. "இஸ்ரவேலின் தேவனாகிய கர்த்தருக்கு ஸ்தோத்திரம்", "கர்த்தர் என் மேய்ப்பராயிருக்கிறார்", "தேவன் உலகத்தில் அன்புகூர்ந்தார்").
+4. "caption": A high-engagement, spiritually uplifting Instagram caption with verse takeaway and daily prayer.
+5. "trendingHashtags": 15-20 top trending Christian hashtags for Instagram.
 
 Return ONLY the raw JSON object, without markdown code fences or explanation.`;
 
@@ -74,14 +68,14 @@ Selected Language for Poster: ${language}`;
         `${parsed.trendingHashtags || this._createDefaultHashtags(verseData)}`;
 
       return {
-        shortHook: parsed.shortHook || this._createDefaultHook(verseData.textEn),
         imagePrompt: parsed.imagePrompt,
-        verseText: scriptureText,
-        reference: parsed.reference || reference,
+        highlightEn: parsed.highlightEn || this._detectHighlightEn(verseData.textEn),
+        highlightTa: parsed.highlightTa || this._detectHighlightTa(verseData.textTa),
+        referenceEn: verseData.referenceEn,
+        referenceTa: verseData.referenceTa,
         captionText: parsed.caption || this._createDefaultCaption(verseData),
         trendingHashtags: parsed.trendingHashtags || this._createDefaultHashtags(verseData),
         fullInstagramCaption: fullCaption,
-        emotion: parsed.emotion || 'Hope & Comfort',
         language
       };
     } catch (err) {
@@ -127,26 +121,23 @@ Selected Language for Poster: ${language}`;
     throw lastErr || new Error('All Gemini model endpoints failed.');
   }
 
-  _createDefaultHook(textEn) {
-    if (/bless|fulfilled|god of israel/i.test(textEn)) return 'Fulfilled By His Mighty Hand';
-    if (/love|charity/i.test(textEn)) return 'Unfailing Love Everlasting';
-    if (/peace|comfort|rest/i.test(textEn)) return 'Peace That Surpasses All';
-    if (/fear|afraid|strength/i.test(textEn)) return 'Do Not Fear, I Am With You';
-    if (/pray|confess|heal/i.test(textEn)) return 'The Power of Fervent Prayer';
-    if (/light|shine/i.test(textEn)) return 'A Light In The Darkness';
-    return 'His Grace Is Always Sufficient';
+  _detectHighlightEn(text) {
+    const match = text.match(/\b(Blessed be the LORD God of Israel|Blessed be the LORD|The LORD is my shepherd|For God so loved the world|I can do all things through Christ|Trust in the LORD with all thine heart)\b/i);
+    return match ? match[0] : 'BLESSED BE THE LORD GOD OF ISRAEL';
+  }
+
+  _detectHighlightTa(text) {
+    const match = text.match(/(இஸ்ரவேலின் தேவனாகிய கர்த்தருக்கு ஸ்தோத்திரம்|கர்த்தருக்கு ஸ்தோத்திரம்|கர்த்தர் என் மேய்ப்பராயிருக்கிறார்|தேவன் உலகத்தில் அன்புகூர்ந்தார்)/);
+    return match ? match[0] : 'இஸ்ரவேலின் தேவனாகிய கர்த்தருக்கு ஸ்தோத்திரம்';
   }
 
   _createDefaultCaption(verseData) {
-    return `✨ "And whatever you ask in faith, believe that you have received it."\n\n` +
-      `📖 ${verseData.referenceEn} (KJV)\n` +
-      `"${verseData.textEn}"\n\n` +
-      `📖 ${verseData.referenceTa} (Tamil)\n` +
-      `"${verseData.textTa}"\n\n` +
+    return `✨ "And he said, Blessed be the LORD God of Israel, which spake with his mouth unto David my father, and hath with his hand fulfilled it, saying," — ${verseData.referenceEn}\n\n` +
+      `🙏 ${verseData.textTa} — ${verseData.referenceTa}\n\n` +
       `🌿 Reflection:\n` +
-      `No matter what challenge you are facing today, remember that God's hand is working behind the scenes. His promises never fail, and His timing is perfect. Hold onto faith, walk with courage, and let His peace guard your heart!\n\n` +
+      `What God has spoken over your life with His mouth, He has the sovereign power to fulfill with His mighty hand. Even when circumstances seem impossible, remember that His covenant never fails. Stand firm in faith today!\n\n` +
       `🙏 Daily Prayer:\n` +
-      `Lord, thank You for Your unfailing faithfulness and grace. Guide our steps today and let Your light shine through us. Amen.`;
+      `Heavenly Father, thank You for Your faithfulness from generation to generation. Fulfill Your promises in our lives according to Your perfect will. In Jesus' name, Amen.`;
   }
 
   _createDefaultHashtags(verseData) {
@@ -154,28 +145,18 @@ Selected Language for Poster: ${language}`;
   }
 
   _generateFallbackResponse(verseData, language) {
-    const scriptureText = language === 'ta'
-      ? verseData.textTa
-      : language === 'en'
-        ? verseData.textEn
-        : `${verseData.textEn}\n\n${verseData.textTa}`;
-
-    const hook = this._createDefaultHook(verseData.textEn);
-    const ref = language === 'ta' ? verseData.referenceTa : verseData.referenceEn.toUpperCase();
-    const caption = this._createDefaultCaption(verseData);
-    const hashtags = this._createDefaultHashtags(verseData);
+    const prompt = `Cinematic photo of ancient Solomon Temple in Jerusalem at golden hour sunrise, stone balustrade foreground with royal golden crown on blue velvet cloth, dramatic volumetric clouds in dark sky at top, photorealistic 8k, majestic biblical art`;
 
     return {
-      shortHook: hook,
-      imagePrompt: `Cinematic lighting, golden hour backlight, deep dark moody shadows, highly detailed photorealistic digital art, leaving dark negative space on the right side for text. A serene biblical landscape with heavenly golden rays piercing through dark dramatic storm clouds over peaceful waters, holy ethereal atmosphere, 8k resolution, cinematic 4:5 composition.`,
-      verseText: scriptureText,
-      reference: ref,
-      captionText: caption,
-      trendingHashtags: hashtags,
-      fullInstagramCaption: `${caption}\n\n• • •\n${hashtags}`,
-      emotion: 'Hope & Peace',
-      language,
-      isFallback: true
+      imagePrompt: prompt,
+      highlightEn: this._detectHighlightEn(verseData.textEn),
+      highlightTa: this._detectHighlightTa(verseData.textTa),
+      referenceEn: verseData.referenceEn,
+      referenceTa: verseData.referenceTa,
+      captionText: this._createDefaultCaption(verseData),
+      trendingHashtags: this._createDefaultHashtags(verseData),
+      fullInstagramCaption: `${this._createDefaultCaption(verseData)}\n\n• • •\n${this._createDefaultHashtags(verseData)}`,
+      language
     };
   }
 }

@@ -5,45 +5,62 @@ const config = require('../config');
 
 class ImageService {
   constructor() {
-    this.provider = config.imageProvider || 'imagen';
+    this.provider = config.imageProvider || 'pollinations'; // 'pollinations' | 'imagen' | 'dalle' | 'mock'
   }
 
   /**
-   * Generates a background image based on prompt
+   * Generates a unique, verse-specific background image (1080x1350)
    * @param {string} prompt - Detailed prompt from Gemini
-   * @param {string} verseReference - Used for naming cache files
-   * @returns {Promise<Buffer>} - Buffer of the generated image
+   * @param {string} verseReference - e.g. "1 Kings 8:15"
+   * @returns {Promise<Buffer>}
    */
-  async generateBackground(prompt, verseReference = 'daily') {
-    const safeRef = verseReference.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const outDir = config.paths.generated;
-    if (!fs.existsSync(outDir)) {
-      fs.mkdirSync(outDir, { recursive: true });
+  async generateBackground(prompt, verseReference = 'verse') {
+    console.log(`[ImageService] Generating background for "${verseReference}"...`);
+    console.log(`[ImageService] Prompt: ${prompt.slice(0, 120)}...`);
+
+    // 1. Pollinations AI (High-resolution Flux / SDXL - Free, photorealistic, no rate limit)
+    try {
+      return await this._generateWithPollinations(prompt);
+    } catch (err) {
+      console.warn(`[ImageService] Pollinations generation error (${err.message}). Trying secondary...`);
     }
 
-    console.log(`[ImageService] Generating background using provider "${this.provider}"...`);
-    console.log(`[ImageService] Prompt: ${prompt.slice(0, 100)}...`);
-
-    // 1. Google Imagen 3
-    if (this.provider === 'imagen' && config.geminiApiKey) {
+    // 2. Google Imagen 3 (if Gemini API key configured)
+    if (config.geminiApiKey) {
       try {
         return await this._generateWithImagen(prompt);
       } catch (err) {
-        console.warn(`[ImageService] Imagen generation failed (${err.message}). Falling back to procedural artwork.`);
+        console.warn(`[ImageService] Imagen generation failed: ${err.message}`);
       }
     }
 
-    // 2. OpenAI DALL-E 3
-    if (this.provider === 'dalle' && config.openaiApiKey) {
-      try {
-        return await this._generateWithDalle(prompt);
-      } catch (err) {
-        console.warn(`[ImageService] DALL-E generation failed (${err.message}). Falling back to procedural artwork.`);
-      }
-    }
-
-    // 3. High-quality Atmospheric Procedural Generator (Fallback & Demo Mode)
+    // 3. Fallback Procedural Atmosphere
     return this._generateProceduralAtmosphere(prompt);
+  }
+
+  /**
+   * Pollinations AI (Photorealistic 1080x1350 vertical cinematic artwork)
+   */
+  async _generateWithPollinations(prompt) {
+    // Clean and encode prompt
+    const enhancedPrompt = `${prompt}, aspect ratio 4:5 vertical portrait, cinematic lighting, 8k resolution, photorealistic, majestic biblical digital art, upper half dark clouds with god rays, lower half detailed panoramic scenery`;
+    const encoded = encodeURIComponent(enhancedPrompt.slice(0, 400));
+    const seed = Math.floor(Math.random() * 999999);
+    const url = `https://image.pollinations.ai/prompt/${encoded}?width=1080&height=1350&nologo=true&seed=${seed}&model=flux`;
+
+    const res = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 35000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      }
+    });
+
+    if (!res.data || res.data.length < 5000) {
+      throw new Error('Invalid image buffer received from Pollinations');
+    }
+
+    return Buffer.from(res.data);
   }
 
   /**
@@ -51,70 +68,29 @@ class ImageService {
    */
   async _generateWithImagen(prompt) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${config.geminiApiKey}`;
-    
-    // Add strict aspect ratio and negative space directives
-    const enhancedPrompt = `${prompt}, aspect ratio 4:5 vertical portrait, cinematic mood, dark negative space on right`;
-
     const response = await axios.post(
       url,
       {
-        instances: [{ prompt: enhancedPrompt }],
+        instances: [{ prompt: `${prompt}, 4:5 portrait aspect ratio, cinematic lighting, upper half dark volumetric clouds, lower half majestic biblical landscape` }],
         parameters: {
           sampleCount: 1,
-          aspectRatio: '3:4', // closest portrait ratio supported
-          outputMimeType: 'image/jpeg',
-          personGeneration: 'ALLOW_ADULT'
+          aspectRatio: '3:4',
+          outputMimeType: 'image/jpeg'
         }
       },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 45000
+        timeout: 40000
       }
     );
 
     const b64 = response.data?.predictions?.[0]?.bytesBase64Encoded;
-    if (!b64) {
-      throw new Error('No image bytes returned in Imagen prediction response');
-    }
-
+    if (!b64) throw new Error('No bytes returned from Imagen');
     return Buffer.from(b64, 'base64');
   }
 
   /**
-   * OpenAI DALL-E 3
-   */
-  async _generateWithDalle(prompt) {
-    const url = 'https://api.openai.com/v1/images/generations';
-    const response = await axios.post(
-      url,
-      {
-        model: 'dall-e-3',
-        prompt: prompt,
-        n: 1,
-        size: '1024x1792', // vertical
-        response_format: 'b64_json'
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${config.openaiApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 45000
-      }
-    );
-
-    const b64 = response.data?.data?.[0]?.b64_json;
-    if (!b64) {
-      throw new Error('No image returned from DALL-E 3');
-    }
-
-    return Buffer.from(b64, 'base64');
-  }
-
-  /**
-   * Procedural Cinematic Canvas Art Generator
-   * Generates a rich, atmospheric 1080x1350 canvas with golden hour backlighting,
-   * deep dark moody shadows, volumetric fog, and dark negative space on the right.
+   * High-quality procedural cinematic generator (instant offline backup)
    */
   async _generateProceduralAtmosphere(prompt) {
     const { createCanvas } = require('@napi-rs/canvas');
@@ -123,88 +99,64 @@ class ImageService {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // Base deep dark moody twilight background
-    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, '#0a0d14');
-    bgGrad.addColorStop(0.3, '#101726');
-    bgGrad.addColorStop(0.7, '#1a1820');
-    bgGrad.addColorStop(1, '#08090d');
-    ctx.fillStyle = bgGrad;
+    // Deep moody sky at the top
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, height * 0.7);
+    skyGrad.addColorStop(0, '#060912');
+    skyGrad.addColorStop(0.4, '#131929');
+    skyGrad.addColorStop(0.7, '#24202d');
+    skyGrad.addColorStop(1, '#4a3424');
+    ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Golden hour backlight burst (positioned on left / upper-left to leave right dark)
-    const sunX = width * 0.28;
-    const sunY = height * 0.32;
-    const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 650);
-    sunGrad.addColorStop(0, 'rgba(255, 235, 175, 0.7)');
-    sunGrad.addColorStop(0.2, 'rgba(249, 180, 70, 0.35)');
-    sunGrad.addColorStop(0.5, 'rgba(180, 95, 30, 0.15)');
-    sunGrad.addColorStop(0.8, 'rgba(40, 20, 60, 0.05)');
+    // Radiant sunburst on upper right
+    const sunX = width * 0.85;
+    const sunY = height * 0.22;
+    const sunGrad = ctx.createRadialGradient(sunX, sunY, 15, sunX, sunY, 700);
+    sunGrad.addColorStop(0, 'rgba(255, 240, 190, 0.9)');
+    sunGrad.addColorStop(0.2, 'rgba(248, 195, 90, 0.5)');
+    sunGrad.addColorStop(0.5, 'rgba(180, 100, 35, 0.2)');
     sunGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
     ctx.fillStyle = sunGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Ethereal light rays from top-left toward bottom-right
+    // God rays streaming diagonally down
     ctx.save();
-    ctx.globalAlpha = 0.12;
-    ctx.fillStyle = '#fff4d0';
-    for (let i = 0; i < 8; i++) {
-      const angle = (i * 0.08) - 0.2;
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = '#fff4d5';
+    for (let i = 0; i < 9; i++) {
+      const angle = 2.0 + (i * 0.08);
       ctx.beginPath();
       ctx.moveTo(sunX, sunY);
-      ctx.lineTo(sunX + Math.cos(angle) * 1400, sunY + Math.sin(angle) * 1400);
-      ctx.lineTo(sunX + Math.cos(angle + 0.04) * 1400, sunY + Math.sin(angle + 0.04) * 1400);
+      ctx.lineTo(sunX + Math.cos(angle) * 1600, sunY + Math.sin(angle) * 1600);
+      ctx.lineTo(sunX + Math.cos(angle + 0.04) * 1600, sunY + Math.sin(angle + 0.04) * 1600);
       ctx.closePath();
       ctx.fill();
     }
     ctx.restore();
 
-    // Silhouetted mountain ridges and gentle mist on the lower-left
+    // Ancient stone temple / Jerusalem panorama in the lower third (matching sample)
+    const templeY = height * 0.65;
     ctx.save();
-    ctx.fillStyle = '#0b0f17';
+    ctx.fillStyle = '#c8a872';
+    // Base temple sanctuary structure
+    ctx.fillRect(width * 0.6, templeY - 80, 260, 120);
+    ctx.fillStyle = '#a88650';
+    ctx.fillRect(width * 0.64, templeY - 140, 180, 60);
+
+    // City walls and buildings stretching left
+    ctx.fillStyle = '#9b7842';
     ctx.beginPath();
-    ctx.moveTo(0, height * 0.7);
-    ctx.bezierCurveTo(width * 0.2, height * 0.62, width * 0.4, height * 0.75, width * 0.7, height * 0.88);
-    ctx.lineTo(width, height * 0.92);
+    ctx.moveTo(0, height * 0.74);
+    ctx.lineTo(width * 0.6, height * 0.70);
+    ctx.lineTo(width, height * 0.72);
     ctx.lineTo(width, height);
     ctx.lineTo(0, height);
     ctx.closePath();
     ctx.fill();
 
-    // Secondary foreground silhouette
-    ctx.fillStyle = '#06080c';
-    ctx.beginPath();
-    ctx.moveTo(0, height * 0.82);
-    ctx.bezierCurveTo(width * 0.15, height * 0.78, width * 0.35, height * 0.85, width * 0.55, height * 0.95);
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-
-    // Glowing symbolic cross silhouette on the distant hill (left)
-    ctx.fillStyle = 'rgba(255, 230, 160, 0.85)';
-    ctx.shadowColor = '#f9d371';
-    ctx.shadowBlur = 20;
-    const crossX = width * 0.24;
-    const crossY = height * 0.62;
-    // Vertical beam
-    ctx.fillRect(crossX - 3, crossY - 60, 6, 80);
-    // Horizontal beam
-    ctx.fillRect(crossX - 22, crossY - 44, 44, 6);
-    ctx.restore();
-
-    // Atmospheric noise / fine stars
-    ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    for (let s = 0; s < 60; s++) {
-      const sx = (Math.sin(s * 99) * 0.5 + 0.5) * width;
-      const sy = (Math.cos(s * 77) * 0.5 + 0.5) * (height * 0.5);
-      const sr = (s % 3 === 0) ? 1.5 : 0.8;
-      ctx.beginPath();
-      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Foreground stone ledge
+    ctx.fillStyle = '#423321';
+    ctx.fillRect(0, height * 0.88, width, height * 0.12);
     ctx.restore();
 
     return canvas.toBuffer('image/jpeg');
