@@ -20,7 +20,6 @@ class CronService {
   }
 
   start() {
-    // Only schedule if explicitly enabled
     if (this.autoPublish) {
       if (this.task) this.task.stop();
       this.task = cron.schedule(this.scheduleExpression, async () => {
@@ -44,17 +43,25 @@ class CronService {
 
   /**
    * Executes the poster generation pipeline:
-   * Verse -> Gemini Analysis -> Background Art -> Canvas Compositor -> Base64 & File
+   * Verse / Custom Input -> Analysis -> High-Definition Artwork -> Canvas Compositor -> Output
+   * @param {Object|string} options - Reference string or options object
+   * @param {string} fallbackLanguage - Language fallback ('both' | 'en' | 'ta')
    */
-  async runDailyPipeline(customReference = null, customLanguage = null) {
+  async runDailyPipeline(options = {}, fallbackLanguage = null) {
     if (this.isRunning) {
       throw new Error('Pipeline is already busy processing a request. Please wait a moment.');
     }
 
+    const opts = (typeof options === 'string')
+      ? { reference: options, language: fallbackLanguage || this.language }
+      : (options || {});
+
     this.isRunning = true;
     const startTime = Date.now();
     const jobId = `job_${Date.now()}`;
-    const targetLang = customLanguage || this.language;
+    const targetLang = opts.language || this.language;
+    const customPrompt = (opts.customPrompt || opts.customImagePrompt || '').trim();
+    const imageModel = opts.imageProvider || opts.model || 'flux';
 
     const record = {
       id: jobId,
@@ -76,11 +83,20 @@ class CronService {
     };
 
     try {
-      // 1. Fetch verse from DB
+      // 1. Fetch or prepare verse data
       let verseData;
-      if (customReference) {
-        log(`Fetching verse: "${customReference}"...`);
-        verseData = await dbService.getVerse(customReference);
+      if (opts.verseTextEn || opts.verseTextTa) {
+        log(`Using manual scripture input: "${opts.reference || 'Custom Verse'}"...`);
+        verseData = {
+          referenceEn: (opts.reference || 'HOLY BIBLE VERSE').toUpperCase(),
+          referenceTa: opts.referenceTa || (opts.reference || 'வேதாகம வசனம்'),
+          textEn: opts.verseTextEn || '',
+          textTa: opts.verseTextTa || '',
+          bookNum: 1
+        };
+      } else if (opts.reference) {
+        log(`Fetching verse: "${opts.reference}"...`);
+        verseData = await dbService.getVerse(opts.reference);
       } else {
         log('Fetching daily random verse from SQLite database...');
         verseData = await dbService.getRandomVerse();
@@ -89,32 +105,37 @@ class CronService {
       record.reference = verseData.referenceEn;
       log(`Scripture: ${verseData.referenceEn} (${verseData.referenceTa})`);
 
-      // 2. Analyze with Gemini
-      log('Generating theological hook, image prompt & viral caption...');
+      // 2. Analyze with Gemini (or construct dynamic metadata)
+      log('Preparing verse analysis, master prompt & caption...');
       const aiAnalysis = await geminiService.analyzeVerse(verseData, targetLang);
+
+      // If user supplied a custom/manual prompt, use it for the background!
+      const activeImagePrompt = customPrompt || aiAnalysis.imagePrompt;
+      aiAnalysis.imagePrompt = activeImagePrompt;
+
       record.shortHook = aiAnalysis.shortHook;
       record.fullInstagramCaption = aiAnalysis.fullInstagramCaption;
       record.trendingHashtags = aiAnalysis.trendingHashtags;
-      log(`Gemini Hook: "${aiAnalysis.shortHook}"`);
+      log(`Active Image Prompt: "${activeImagePrompt.slice(0, 100)}..."`);
 
-      // 3. Generate background artwork
-      log(`Generating background artwork via ${imageService.provider}...`);
-      const bgBuffer = await imageService.generateBackground(aiAnalysis.imagePrompt, verseData.referenceEn);
+      // 3. Generate background artwork via high-definition image model
+      log(`Generating high-definition background artwork via [${imageModel}]...`);
+      const bgBuffer = await imageService.generateBackground(activeImagePrompt, verseData.referenceEn, imageModel);
 
       // 4. Composite 1080x1350 poster with Canvas
-      log('Compositing 1080x1350 luxury typography poster matching premium reference...');
+      log('Compositing 1080x1350 luxury typography poster matching premium master style...');
       const posterBuffer = await posterEngine.renderPoster({
         backgroundImage: bgBuffer,
         referenceEn: verseData.referenceEn,
         referenceTa: verseData.referenceTa,
         verseTextEn: verseData.textEn,
         verseTextTa: verseData.textTa,
-        highlightEn: aiAnalysis.highlightEn,
-        highlightTa: aiAnalysis.highlightTa,
+        highlightEn: opts.highlightEn || aiAnalysis.highlightEn,
+        highlightTa: opts.highlightTa || aiAnalysis.highlightTa,
         language: targetLang
       });
 
-      // Encode as Base64 Data URI (works seamlessly on Vercel serverless without disk persistence)
+      // Encode as Base64 Data URI (serverless-friendly)
       record.posterDataUri = `data:image/jpeg;base64,${posterBuffer.toString('base64')}`;
 
       // Try saving to disk (local environment or /tmp on Vercel)
@@ -128,17 +149,16 @@ class CronService {
         fs.writeFileSync(path.join(outDir, filename), posterBuffer);
         record.posterUrl = `/generated/${filename}`;
       } catch (writeErr) {
-        // Fallback to /tmp in serverless environments
         try {
           const tmpPath = path.join(os.tmpdir(), filename);
           fs.writeFileSync(tmpPath, posterBuffer);
-          record.posterUrl = record.posterDataUri; // use data uri directly
+          record.posterUrl = record.posterDataUri;
         } catch (tmpErr) {
           record.posterUrl = record.posterDataUri;
         }
       }
 
-      log(`Poster created successfully!`);
+      log('Poster created successfully!');
 
       record.status = 'COMPLETED';
       record.verseData = verseData;

@@ -5,73 +5,124 @@ const config = require('../config');
 
 class ImageService {
   constructor() {
-    this.provider = config.imageProvider || 'pollinations'; // 'pollinations' | 'imagen' | 'dalle' | 'mock'
+    this.provider = config.imageProvider || 'flux'; // 'flux' | 'imagen' | 'dalle' | 'mock'
   }
 
   /**
-   * Generates a unique, verse-specific background image (1080x1350)
-   * @param {string} prompt - Detailed prompt from Gemini
+   * Generates a high-definition 1080x1350 vertical artwork matching the requested prompt and model
+   * @param {string} prompt - Detailed prompt (manual or AI-generated)
    * @param {string} verseReference - e.g. "1 Kings 8:15"
+   * @param {string} requestedProvider - 'flux' | 'dalle' | 'imagen' | 'mock'
    * @returns {Promise<Buffer>}
    */
-  async generateBackground(prompt, verseReference = 'verse') {
-    console.log(`[ImageService] Generating background for "${verseReference}"...`);
-    console.log(`[ImageService] Prompt: ${prompt.slice(0, 120)}...`);
+  async generateBackground(prompt, verseReference = 'verse', requestedProvider = null) {
+    const provider = requestedProvider || this.provider || 'flux';
+    console.log(`[ImageService] Generating background for "${verseReference}" using model/provider: "${provider}"...`);
+    console.log(`[ImageService] Prompt: ${prompt.slice(0, 140)}...`);
 
-    // 1. Pollinations AI (High-resolution Flux / SDXL - Free, photorealistic, no rate limit)
-    try {
-      return await this._generateWithPollinations(prompt);
-    } catch (err) {
-      console.warn(`[ImageService] Pollinations generation error (${err.message}). Trying secondary...`);
-    }
-
-    // 2. Google Imagen 3 (if Gemini API key configured)
-    if (config.geminiApiKey) {
+    // 1. If OpenAI DALL-E 3 is requested
+    if ((provider === 'dalle' || provider === 'dalle3') && config.openaiApiKey) {
       try {
-        return await this._generateWithImagen(prompt);
+        console.log('[ImageService] Calling OpenAI DALL-E 3 HD...');
+        return await this._generateWithDalle(prompt);
       } catch (err) {
-        console.warn(`[ImageService] Imagen generation failed: ${err.message}`);
+        console.warn(`[ImageService] DALL-E 3 failed (${err.message}). Falling back to Flux...`);
       }
     }
 
-    // 3. Fallback Procedural Atmosphere
+    // 2. If Google Imagen is requested
+    if (provider === 'imagen' && config.geminiApiKey) {
+      try {
+        console.log('[ImageService] Calling Google Imagen 3...');
+        return await this._generateWithImagen(prompt);
+      } catch (err) {
+        console.warn(`[ImageService] Imagen failed (${err.message}). Falling back to Flux...`);
+      }
+    }
+
+    // 3. Primary High-Definition Model: Black Forest Labs FLUX.1 (Via Pollinations)
+    if (provider !== 'mock') {
+      try {
+        console.log('[ImageService] Generating via High-Definition FLUX.1 (8K Photorealistic)...');
+        return await this._generateWithFlux(prompt);
+      } catch (err) {
+        console.warn(`[ImageService] Flux generation failed (${err.message}). Trying secondary...`);
+      }
+    }
+
+    // 4. Procedural Atmospheric Engine (Zero-latency offline fallback)
+    console.log('[ImageService] Generating via Procedural Studio Engine...');
     return this._generateProceduralAtmosphere(prompt);
   }
 
   /**
-   * Pollinations AI (Photorealistic 1080x1350 vertical cinematic artwork)
+   * High-Definition FLUX.1 Model
+   * Photorealistic 1080x1350 vertical portrait with cinematic masterclass cues
    */
-  async _generateWithPollinations(prompt) {
-    // Clean and encode prompt with exact masterclass visual cues
-    const enhancedPrompt = `${prompt}, aspect ratio 4:5 vertical portrait, cinematic lighting, deep navy blue, royal blue, antique gold and warm ivory, photorealistic 8k, reverent sacred biblical digital art, upper half dark navy clouds with god rays, lower half majestic panoramic scenery, volumetric lighting`;
-    const encoded = encodeURIComponent(enhancedPrompt.slice(0, 480));
-    const seed = Math.floor(Math.random() * 999999);
+  async _generateWithFlux(prompt) {
+    const enhancedPrompt = this._enhancePrompt(prompt);
+    // Allow up to 1500 chars for deep prompt fidelity
+    const encoded = encodeURIComponent(enhancedPrompt.slice(0, 1500));
+    const seed = Math.floor(Math.random() * 9999999);
     const url = `https://image.pollinations.ai/prompt/${encoded}?width=1080&height=1350&nologo=true&seed=${seed}&model=flux`;
 
     const res = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 35000,
+      timeout: 45000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
 
     if (!res.data || res.data.length < 5000) {
-      throw new Error('Invalid image buffer received from Pollinations');
+      throw new Error('Invalid image buffer received from Flux endpoint');
     }
 
     return Buffer.from(res.data);
   }
 
   /**
-   * Google Imagen 3 via Gemini REST API
+   * OpenAI DALL-E 3 HD Generator
+   */
+  async _generateWithDalle(prompt) {
+    const url = 'https://api.openai.com/v1/images/generations';
+    const enhancedPrompt = `${prompt.slice(0, 900)}, vertical portrait 1024x1792, cinematic lighting, 8k photorealistic, upper half dark volumetric clouds, lower half majestic sacred biblical landscape`;
+
+    const res = await axios.post(
+      url,
+      {
+        model: 'dall-e-3',
+        prompt: enhancedPrompt,
+        n: 1,
+        size: '1024x1792',
+        quality: 'hd',
+        response_format: 'b64_json'
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${config.openaiApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000
+      }
+    );
+
+    const b64 = res.data?.data?.[0]?.b64_json;
+    if (!b64) throw new Error('No b64 image returned from DALL-E 3 API');
+    return Buffer.from(b64, 'base64');
+  }
+
+  /**
+   * Google Imagen 3 Generator
    */
   async _generateWithImagen(prompt) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${config.geminiApiKey}`;
     const response = await axios.post(
       url,
       {
-        instances: [{ prompt: `${prompt}, 4:5 portrait aspect ratio, cinematic lighting, upper half dark volumetric clouds, lower half majestic biblical landscape` }],
+        instances: [{
+          prompt: `${prompt.slice(0, 900)}, vertical 4:5 portrait, cinematic volumetric lighting, 8k, dark navy storm clouds upper half, majestic biblical landscape lower half`
+        }],
         parameters: {
           sampleCount: 1,
           aspectRatio: '3:4',
@@ -87,6 +138,32 @@ class ImageService {
     const b64 = response.data?.predictions?.[0]?.bytesBase64Encoded;
     if (!b64) throw new Error('No bytes returned from Imagen');
     return Buffer.from(b64, 'base64');
+  }
+
+  /**
+   * Enhances prompts with elite visual cues to prevent boring imagery
+   */
+  _enhancePrompt(prompt) {
+    const clean = (prompt || '').trim();
+    const additions = [];
+
+    if (!/4:5|portrait|vertical/i.test(clean)) {
+      additions.push('vertical 4:5 portrait composition');
+    }
+    if (!/cinematic|volumetric/i.test(clean)) {
+      additions.push('cinematic volumetric god rays, majestic spiritual atmosphere');
+    }
+    if (!/navy|gold|ivory/i.test(clean)) {
+      additions.push('deep navy blue, royal blue, antique gold and warm ivory palette');
+    }
+    if (!/8k|photoreal|realistic/i.test(clean)) {
+      additions.push('photorealistic 8k visual quality, extraordinary atmospheric depth');
+    }
+    if (!/upper|clouds|negative space/i.test(clean)) {
+      additions.push('upper 55% dramatic dark navy volumetric clouds with heavenly sunburst, lower 45% majestic sacred architecture or landscape');
+    }
+
+    return additions.length > 0 ? `${clean}, ${additions.join(', ')}` : clean;
   }
 
   /**
@@ -134,11 +211,10 @@ class ImageService {
     }
     ctx.restore();
 
-    // Ancient stone temple / Jerusalem panorama in the lower third (matching sample)
+    // Ancient stone temple / Jerusalem panorama in the lower third
     const templeY = height * 0.65;
     ctx.save();
     ctx.fillStyle = '#c8a872';
-    // Base temple sanctuary structure
     ctx.fillRect(width * 0.6, templeY - 80, 260, 120);
     ctx.fillStyle = '#a88650';
     ctx.fillRect(width * 0.64, templeY - 140, 180, 60);

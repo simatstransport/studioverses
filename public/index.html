@@ -90,24 +90,110 @@
     <main class="main-content">
       <!-- Left Control Panel -->
       <section class="control-panel">
-        <!-- Verse Search Card -->
-        <div class="glass-card">
-          <h2 class="card-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
-            Select Scripture
-          </h2>
-          <div class="search-box">
-            <input type="text" id="verseQuery" placeholder="e.g. 1 Kings 8:15, Isa 40:31, John 3:16" value="1 Kings 8:15">
-            <button class="btn btn-secondary" id="btnRandom" title="Pick Random Daily Verse">
-              🎲 Random
-            </button>
+        <!-- Mode Switcher Toggle Card -->
+        <div class="glass-card mode-toggle-card">
+          <div class="mode-toggle-flex">
+            <div class="mode-badge-group">
+              <span class="mode-indicator-dot" id="modeIndicatorDot"></span>
+              <span class="mode-title" id="modeTitle">Auto Scripture Mode</span>
+            </div>
+            <div class="switch-container">
+              <span class="switch-label">Manual Prompt</span>
+              <label class="switch" title="Toggle Manual Prompt Mode">
+                <input type="checkbox" id="toggleManualPrompt">
+                <span class="slider round"></span>
+              </label>
+            </div>
           </div>
-          <div class="quick-examples">
-            <span>Try:</span>
-            <button class="chip" data-ref="1 Kings 8:15">1 Kings 8:15</button>
-            <button class="chip" data-ref="Isaiah 40:31">Isa 40:31</button>
-            <button class="chip" data-ref="Psalm 23:1">Ps 23:1</button>
-            <button class="chip" data-ref="Philippians 4:13">Phil 4:13</button>
+          <p class="mode-description" id="modeDesc">
+            AI automatically crafts 8K scenery & master prompts from your selected verse.
+          </p>
+        </div>
+
+        <!-- AUTO SCRIPTURE SECTION -->
+        <div id="autoScriptureSection">
+          <!-- Verse Search Card -->
+          <div class="glass-card">
+            <h2 class="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+              Select Scripture
+            </h2>
+            <div class="search-box">
+              <input type="text" id="verseQuery" placeholder="e.g. 1 Kings 8:15, Isa 40:31, John 3:16" value="1 Kings 8:15">
+              <button class="btn btn-secondary" id="btnRandom" title="Pick Random Daily Verse">
+                🎲 Random
+              </button>
+            </div>
+            <div class="quick-examples">
+              <span>Try:</span>
+              <button class="chip" data-ref="1 Kings 8:15">1 Kings 8:15</button>
+              <button class="chip" data-ref="Isaiah 40:31">Isa 40:31</button>
+              <button class="chip" data-ref="Psalm 23:1">Ps 23:1</button>
+              <button class="chip" data-ref="Philippians 4:13">Phil 4:13</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MANUAL PROMPT SECTION (Toggled ON/OFF) -->
+        <div id="manualPromptSection" class="hidden">
+          <div class="glass-card manual-prompt-card">
+            <div class="card-header-flex">
+              <h2 class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Custom Background Prompt
+              </h2>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnAutoFillPrompt" title="Fetch AI prompt for current scripture">
+                🪄 Fill from Verse
+              </button>
+            </div>
+
+            <div class="form-group">
+              <label for="manualImagePrompt">Enter Scenery Prompt (Ultra 8K Visual Cues):</label>
+              <textarea id="manualImagePrompt" class="form-control" rows="4" placeholder="Describe the background scenery in detail: e.g. Breathtaking ancient Solomon's Temple in Jerusalem with towering limestone pillars, stone balustrades, heavenly golden rays breaking through dramatic dark navy clouds, warm divine light, floating golden particles..."></textarea>
+            </div>
+
+            <!-- Quick Prompt Keyword Pills -->
+            <div class="prompt-pills-wrapper">
+              <span class="pills-label">Quick Scenery Cues (Click to Add):</span>
+              <div class="prompt-pills">
+                <button type="button" class="prompt-pill" data-text="Solomon’s Temple with limestone pillars and golden terraces">🏛️ Solomon's Temple</button>
+                <button type="button" class="prompt-pill" data-text="Mount Calvary at dawn with ethereal golden glowing cross">✝️ Mount Calvary</button>
+                <button type="button" class="prompt-pill" data-text="Sea of Galilee with calming waves and divine peace">🌊 Sea of Galilee</button>
+                <button type="button" class="prompt-pill" data-text="Lush rolling green pastures of Judea with still waters">🌿 Still Waters</button>
+                <button type="button" class="prompt-pill" data-text="Heavenly golden sunburst rays breaking through dramatic dark navy clouds">☀️ Sunburst Rays</button>
+                <button type="button" class="prompt-pill" data-text="Open Holy Bible with radiating celestial aura on stone balustrade">📖 Open Holy Bible</button>
+                <button type="button" class="prompt-pill" data-text="Subtle floating golden particles with extraordinary depth">✨ Golden Particles</button>
+              </div>
+            </div>
+
+            <!-- Advanced Verse Overrides (Collapsible) -->
+            <details class="advanced-scripture-details">
+              <summary>Custom Scripture Text & Highlights (Optional)</summary>
+              <div class="advanced-fields">
+                <div class="form-group">
+                  <label for="manualReference">Reference (English | Tamil):</label>
+                  <input type="text" id="manualReference" class="form-control" placeholder="e.g. 1 KINGS 8:15 | 1 இராஜாக்கள் 8:15" value="1 KINGS 8:15 | 1 இராஜாக்கள் 8:15">
+                </div>
+                <div class="form-group">
+                  <label for="manualTextEn">English Verse Text (Optional Override):</label>
+                  <textarea id="manualTextEn" class="form-control" rows="2" placeholder="Leave blank to use database text automatically"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="manualTextTa">Tamil Verse Text (Optional Override):</label>
+                  <textarea id="manualTextTa" class="form-control" rows="2" placeholder="Leave blank to use database text automatically"></textarea>
+                </div>
+                <div class="grid-2-col">
+                  <div class="form-group">
+                    <label for="manualHlEn">Gold Highlight (English):</label>
+                    <input type="text" id="manualHlEn" class="form-control" placeholder="e.g. BLESSED BE THE LORD">
+                  </div>
+                  <div class="form-group">
+                    <label for="manualHlTa">Gold Highlight (Tamil):</label>
+                    <input type="text" id="manualHlTa" class="form-control" placeholder="e.g. கர்த்தருக்கு ஸ்தோத்திரம்">
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -137,19 +223,20 @@
             </div>
           </div>
 
-          <!-- Background Art Provider -->
+          <!-- Background Art High-Definition Model -->
           <div class="form-group">
-            <label for="imageProviderSelect">Background Art Provider:</label>
+            <label for="imageProviderSelect">High Image Generation Model:</label>
             <select id="imageProviderSelect" class="form-control">
-              <option value="imagen">Google Imagen 3 (Via Gemini API)</option>
-              <option value="dalle">OpenAI DALL-E 3</option>
-              <option value="mock" selected>Atmospheric Procedural Engine (Fast & Free)</option>
+              <option value="flux" selected>🚀 FLUX.1 (8K Ultra-Photorealistic & Free) — Recommended</option>
+              <option value="dalle">🎨 OpenAI DALL-E 3 HD (1024x1792)</option>
+              <option value="imagen">🏛️ Google Imagen 3 (Via Gemini API)</option>
+              <option value="mock">⚡ Atmospheric Procedural Engine (Instant & Offline)</option>
             </select>
           </div>
 
           <!-- Generate Action -->
           <button class="btn btn-primary btn-block btn-lg" id="btnGenerate">
-            <span class="btn-text">✨ Generate 1080x1350 Poster</span>
+            <span class="btn-text" id="btnGenerateText">✨ Generate 1080x1350 Poster</span>
             <span class="spinner hidden"></span>
           </button>
         </div>

@@ -108,24 +108,45 @@ app.get('/api/verse/search', async (req, res) => {
 });
 
 /**
+ * 3b. Fetch AI Prompt preview for a verse (for Manual Prompt auto-fill)
+ */
+app.get('/api/verse/prompt', async (req, res) => {
+  const query = req.query.q || '1 Kings 8:15';
+  const lang = req.query.lang || 'both';
+
+  try {
+    let verseData;
+    if (query === 'random') {
+      verseData = await dbService.getRandomVerse();
+    } else {
+      verseData = await dbService.getVerse(query);
+    }
+
+    const aiAnalysis = await geminiService.analyzeVerse(verseData, lang);
+    res.json({
+      success: true,
+      data: {
+        verse: verseData,
+        imagePrompt: aiAnalysis.imagePrompt,
+        masterPrompt: aiAnalysis.masterPrompt,
+        locationTheme: aiAnalysis.locationTheme,
+        highlightEn: aiAnalysis.highlightEn,
+        highlightTa: aiAnalysis.highlightTa,
+        caption: aiAnalysis.fullInstagramCaption,
+        trendingHashtags: aiAnalysis.trendingHashtags
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * 4. Generate AI Prompt, Background Artwork & Composite Poster
  */
 app.post('/api/poster/generate', async (req, res) => {
-  const {
-    reference,
-    language = 'both',
-    imageProvider,
-    customHook,
-    customImagePrompt
-  } = req.body;
-
-  // Temporarily allow override of image provider per request if specified
-  if (imageProvider && ['imagen', 'dalle', 'mock'].includes(imageProvider)) {
-    imageService.provider = imageProvider;
-  }
-
   try {
-    const result = await cronService.runDailyPipeline(reference || null, language);
+    const result = await cronService.runDailyPipeline(req.body);
     res.json({
       success: true,
       data: result
