@@ -22,6 +22,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/generated', express.static(path.join(__dirname, 'public', 'generated')));
 
+// Route for dedicated Login page
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 // Ensure generated directory exists
 if (!fs.existsSync(config.paths.generated)) {
   fs.mkdirSync(config.paths.generated, { recursive: true });

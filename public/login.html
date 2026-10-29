@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Scripture Studio</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Firebase Compat SDK (Most reliable & universally compatible across all browsers) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+</head>
+<body class="login-body">
+  <div class="login-wrapper">
+    <div class="glass-card login-card">
+      <!-- Header / Logo -->
+      <div class="login-header">
+        <span class="cross-icon">┼</span>
+        <h1>SCRIPTURE STUDIO</h1>
+        <p class="subtitle">Premium Multilingual Poster Engine</p>
+      </div>
+
+      <!-- Error / Notice Box -->
+      <div id="authAlert" class="auth-alert hidden"></div>
+
+      <!-- Primary Action: Google Sign In -->
+      <button id="btnGoogleSignIn" class="btn btn-google-large">
+        <svg class="google-icon" viewBox="0 0 24 24" width="20" height="20">
+          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.14z"/>
+          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.14C3.27 21.36 7.34 24 12 24z"/>
+          <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.59H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.41l4.03-3.14z"/>
+          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.64 1.25 6.59l4.03 3.14c.95-2.83 3.6-4.98 6.72-4.98z"/>
+        </svg>
+        <span id="btnGoogleText">Continue with Google</span>
+      </button>
+
+      <!-- Divider -->
+      <div class="login-divider">
+        <span>or sign in with email</span>
+      </div>
+
+      <!-- Email / Password Form -->
+      <form id="emailAuthForm">
+        <div class="form-group">
+          <label for="authEmail">Email Address</label>
+          <input type="email" id="authEmail" placeholder="you@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="authPassword">Password</label>
+          <input type="password" id="authPassword" placeholder="••••••••" required minlength="6">
+        </div>
+
+        <button type="submit" id="btnSubmitEmail" class="btn btn-primary btn-block btn-lg">
+          <span id="submitBtnText">Sign In</span>
+        </button>
+      </form>
+
+      <!-- Toggle Sign In / Sign Up -->
+      <div class="login-footer">
+        <p id="toggleAuthText">
+          Don't have an account? 
+          <a href="#" id="toggleAuthLink">Sign Up</a>
+        </p>
+
+        <div class="guest-access">
+          <a href="/" class="btn-guest">Continue as Guest →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+</html>
