@@ -4,24 +4,19 @@ const imageService = require('./services/imageService');
 const posterEngine = require('./services/posterEngine');
 const fs = require('fs');
 
-async function testPipeline() {
-  console.log('--- Testing New Premium Reference Layout ---');
+async function testPsalm73() {
+  console.log('--- Testing Psalm 73:2 with Holy Bible Filler & Tamil Font Fix ---');
 
-  // 1. Fetch Verse
-  const verse = await dbService.getVerse('1 Kings 8:15');
+  const verse = await dbService.getVerse('Psalm 73:2');
   console.log('✓ Verse loaded:', verse.referenceEn, '|', verse.referenceTa);
 
-  // 2. Gemini Analysis
   const ai = await geminiService.analyzeVerse(verse, 'both');
-  console.log('✓ Scene prompt:', ai.imagePrompt.slice(0, 80) + '...');
   console.log('✓ Highlight EN:', ai.highlightEn);
   console.log('✓ Highlight TA:', ai.highlightTa);
 
-  // 3. Generate Scene Artwork
+  // Background artwork
   const bg = await imageService.generateBackground(ai.imagePrompt, verse.referenceEn);
-  console.log('✓ Generated artwork bytes:', bg.length);
 
-  // 4. Render Poster
   const poster = await posterEngine.renderPoster({
     backgroundImage: bg,
     referenceEn: verse.referenceEn,
@@ -34,9 +29,8 @@ async function testPipeline() {
   });
 
   fs.mkdirSync('public/generated', { recursive: true });
-  fs.writeFileSync('public/generated/test_verified.jpg', poster);
-  console.log('✓ Rendered 1080x1350 poster saved to public/generated/test_verified.jpg');
-  console.log('✓ Poster size:', (poster.length / 1024).toFixed(1), 'KB');
+  fs.writeFileSync('public/generated/test_psalm73.jpg', poster);
+  console.log('✓ Successfully rendered Psalm 73:2 poster! Saved to public/generated/test_psalm73.jpg');
 }
 
-testPipeline().catch(console.error);
+testPsalm73().catch(console.error);

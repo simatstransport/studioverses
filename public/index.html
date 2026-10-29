@@ -8,6 +8,35 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Great+Vibes&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet">
+  
+  <!-- Firebase Auth Guard (Redirects to /login.html if not authenticated) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCM5ZAhpxoT1oV5PqnXYe82gqfVzmYLB88",
+      authDomain: "bible-a005d.firebaseapp.com",
+      projectId: "bible-a005d",
+      storageBucket: "bible-a005d.firebasestorage.app",
+      messagingSenderId: "511311028262",
+      appId: "1:511311028262:web:d1e4475f8c899c959886e7",
+      measurementId: "G-HEZV6KNJL0"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    firebase.auth().onAuthStateChanged((user) => {
+      if (!user) {
+        window.location.replace('/login.html');
+      } else {
+        document.documentElement.classList.add('auth-verified');
+      }
+    });
+  </script>
+  <style>
+    /* Hide dashboard until user authentication is verified */
+    html:not(.auth-verified) body {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
   <div class="app-layout">

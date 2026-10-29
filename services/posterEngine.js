@@ -146,6 +146,12 @@ class PosterEngine {
       const refString = `${referenceEn.toUpperCase()}   |   ${referenceTa}`;
       this._renderReference(ctx, refString, width / 2, currentY);
 
+      // Sacred Filler: If there is generous vertical gap in the middle (e.g. currentY < 700),
+      // render the illuminated Open Holy Bible filler emblem!
+      if (currentY < 680) {
+        this._renderHolyBibleFiller(ctx, width / 2, currentY + 70);
+      }
+
     } else if (language === 'ta') {
       // Tamil Only (Larger typography)
       currentY = this._renderScriptureText(ctx, {
@@ -364,7 +370,8 @@ class PosterEngine {
   _renderReference(ctx, refString, centerX, y) {
     ctx.save();
 
-    ctx.font = 'bold 21px "Cinzel", "Playfair Display", Georgia, serif';
+    // Prioritize Mukta Malar so Tamil Unicode characters never render as tofu boxes [][][][]
+    ctx.font = 'bold 21px "Mukta Malar", "Cinzel", "Playfair Display", Georgia, sans-serif';
     ctx.fillStyle = '#E5C068';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -373,6 +380,91 @@ class PosterEngine {
     ctx.shadowOffsetY = 2;
 
     ctx.fillText(refString, centerX, y);
+    ctx.restore();
+  }
+
+  /**
+   * Illuminated Open Holy Bible Filler Graphic
+   * Beautifully bridges the gap below the verse and above the temple/city scenery
+   */
+  _renderHolyBibleFiller(ctx, centerX, y) {
+    ctx.save();
+
+    // Radiant celestial aura
+    const glow = ctx.createRadialGradient(centerX, y, 5, centerX, y, 95);
+    glow.addColorStop(0, 'rgba(255, 235, 160, 0.38)');
+    glow.addColorStop(0.4, 'rgba(248, 215, 117, 0.18)');
+    glow.addColorStop(1, 'rgba(248, 215, 117, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(centerX, y, 95, 0, Math.PI * 2);
+    ctx.fill();
+
+    const w = 72; // half-width of open Bible
+    const h = 42; // height
+
+    ctx.fillStyle = 'rgba(255, 252, 242, 0.95)';
+    ctx.strokeStyle = '#D4A737';
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 12;
+
+    // Left Page (curved open page)
+    ctx.beginPath();
+    ctx.moveTo(centerX, y + h * 0.65);
+    ctx.quadraticCurveTo(centerX - w * 0.5, y + h * 0.88, centerX - w, y + h * 0.55);
+    ctx.lineTo(centerX - w, y - h * 0.55);
+    ctx.quadraticCurveTo(centerX - w * 0.5, y - h * 0.28, centerX, y - h * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Right Page (curved open page)
+    ctx.beginPath();
+    ctx.moveTo(centerX, y + h * 0.65);
+    ctx.quadraticCurveTo(centerX + w * 0.5, y + h * 0.88, centerX + w, y + h * 0.55);
+    ctx.lineTo(centerX + w, y - h * 0.55);
+    ctx.quadraticCurveTo(centerX + w * 0.5, y - h * 0.28, centerX, y - h * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Faint golden scripture lines on both pages
+    ctx.strokeStyle = 'rgba(212, 167, 55, 0.55)';
+    ctx.lineWidth = 1.2;
+    for (let i = -2; i <= 2; i++) {
+      const lineY = y + i * 6.5;
+      // Left lines
+      ctx.beginPath();
+      ctx.moveTo(centerX - w + 14, lineY);
+      ctx.lineTo(centerX - 12, lineY + 2);
+      ctx.stroke();
+
+      // Right lines
+      ctx.beginPath();
+      ctx.moveTo(centerX + 12, lineY + 2);
+      ctx.lineTo(centerX + w - 14, lineY);
+      ctx.stroke();
+    }
+
+    // Ribbon marker (draped down center)
+    ctx.strokeStyle = '#B82626';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(centerX, y - h * 0.48);
+    ctx.quadraticCurveTo(centerX + 4, y + h * 0.35, centerX + 2, y + h * 0.95);
+    ctx.stroke();
+
+    // Radiant golden cross above the open Bible
+    ctx.fillStyle = '#F8D775';
+    ctx.shadowColor = 'rgba(249, 215, 117, 0.85)';
+    ctx.shadowBlur = 14;
+    const crossY = y - h * 0.5 - 18;
+    // vertical beam
+    ctx.fillRect(centerX - 2, crossY - 14, 4, 20);
+    // horizontal beam
+    ctx.fillRect(centerX - 9, crossY - 9, 18, 4);
+
     ctx.restore();
   }
 

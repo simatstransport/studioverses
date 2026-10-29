@@ -26,7 +26,7 @@ const toggleAuthText = document.getElementById('toggleAuthText');
 const toggleAuthLink = document.getElementById('toggleAuthLink');
 const authAlert = document.getElementById('authAlert');
 
-let isSignUpMode = false;
+let isSignUpMode = true;
 
 // If already signed in, redirect to home
 auth.onAuthStateChanged((user) => {
