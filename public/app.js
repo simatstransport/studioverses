@@ -53,6 +53,16 @@ function setupEventListeners() {
     }
   });
 
+  // Auth change listener
+  window.addEventListener('auth-changed', (e) => {
+    const user = e.detail?.user;
+    if (user) {
+      statusBar.textContent = `Welcome, ${user.displayName || 'Believer'}! Signed in with Google.`;
+    } else {
+      statusBar.textContent = 'Ready to generate. Select a scripture or click Random Verse.';
+    }
+  });
+
   // Example chips
   document.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
